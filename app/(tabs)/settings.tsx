@@ -8,27 +8,66 @@ import {
   ScrollView,
   StyleSheet,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { getApiKey, setApiKey, deleteApiKey } from '../../services/secureStorage';
-import { getRemainingQuestions } from '../../services/storage';
+import { getRemainingQuestions, getIsPro } from '../../services/storage';
+import { purchasePro, restorePurchases, syncProStatus } from '../../services/revenueCat';
 
 export default function SettingsScreen() {
   const [apiKey, setApiKeyState] = useState('');
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const [remaining, setRemaining] = useState(5);
+  const [isPro, setIsProState] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   const load = useCallback(async () => {
-    const [key, rem] = await Promise.all([getApiKey(), getRemainingQuestions()]);
+    const [key, rem, pro] = await Promise.all([getApiKey(), getRemainingQuestions(), getIsPro()]);
     setSavedKey(key);
     setRemaining(rem);
+    setIsProState(pro);
     if (key) setApiKeyState(key);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const handleUpgrade = async () => {
+    setPurchasing(true);
+    try {
+      const { success, cancelled } = await purchasePro();
+      if (success) {
+        setIsProState(true);
+        Alert.alert('Welcome to Pro!', 'You now have unlimited questions.');
+      } else if (!cancelled) {
+        Alert.alert('Purchase failed', 'Please try again.');
+      }
+    } catch (e: any) {
+      Alert.alert('Purchase failed', e.message ?? 'Please try again.');
+    } finally {
+      setPurchasing(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    setRestoring(true);
+    try {
+      const isPro = await restorePurchases();
+      setIsProState(isPro);
+      Alert.alert(
+        isPro ? 'Pro Restored' : 'No Purchase Found',
+        isPro ? 'Your Pro subscription has been restored.' : 'No previous Pro purchase found on this account.',
+      );
+    } catch {
+      Alert.alert('Restore failed', 'Please try again.');
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   const handleSave = async () => {
     const trimmed = apiKey.trim();
@@ -77,20 +116,42 @@ export default function SettingsScreen() {
           <View style={styles.card}>
             <View style={styles.planRow}>
               <View>
-                <Text style={styles.planName}>Free</Text>
-                <Text style={styles.planDetail}>{remaining} question{remaining !== 1 ? 's' : ''} remaining today</Text>
+                <Text style={styles.planName}>{isPro ? 'Pro ✦' : 'Free'}</Text>
+                <Text style={styles.planDetail}>
+                  {isPro ? 'Unlimited questions' : `${remaining} question${remaining !== 1 ? 's' : ''} remaining today`}
+                </Text>
               </View>
-              <TouchableOpacity style={styles.upgradeBtn} activeOpacity={0.8}>
-                <Text style={styles.upgradeText}>Upgrade to Pro</Text>
-              </TouchableOpacity>
+              {!isPro && (
+                <TouchableOpacity
+                  style={[styles.upgradeBtn, purchasing && styles.upgradeBtnDisabled]}
+                  onPress={handleUpgrade}
+                  disabled={purchasing}
+                  activeOpacity={0.8}
+                >
+                  {purchasing
+                    ? <ActivityIndicator size="small" color={Colors.white} />
+                    : <Text style={styles.upgradeText}>Upgrade to Pro</Text>
+                  }
+                </TouchableOpacity>
+              )}
             </View>
-            <View style={styles.divider} />
-            <View style={styles.proFeatures}>
-              <Text style={styles.proLine}>✓  Unlimited questions</Text>
-              <Text style={styles.proLine}>✓  Priority response speed</Text>
-              <Text style={styles.proLine}>✓  Conversation history sync</Text>
-              <Text style={styles.proPrice}>$9.99 / month</Text>
-            </View>
+            {!isPro && (
+              <>
+                <View style={styles.divider} />
+                <View style={styles.proFeatures}>
+                  <Text style={styles.proLine}>✓  Unlimited questions</Text>
+                  <Text style={styles.proLine}>✓  Priority response speed</Text>
+                  <Text style={styles.proLine}>✓  Conversation history sync</Text>
+                  <Text style={styles.proPrice}>$9.99 / month</Text>
+                  <TouchableOpacity onPress={handleRestore} disabled={restoring} style={styles.restoreBtn}>
+                    {restoring
+                      ? <ActivityIndicator size="small" color={Colors.grayDark} />
+                      : <Text style={styles.restoreText}>Restore Purchase</Text>
+                    }
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         </View>
 
@@ -251,6 +312,18 @@ const styles = StyleSheet.create({
     color: Colors.teal,
     fontWeight: '600',
     marginTop: 6,
+  },
+  upgradeBtnDisabled: {
+    backgroundColor: Colors.navyMid,
+  },
+  restoreBtn: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+  },
+  restoreText: {
+    fontSize: 13,
+    color: Colors.grayDark,
+    textDecorationLine: 'underline',
   },
   keyRow: {
     flexDirection: 'row',

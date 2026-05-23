@@ -82,3 +82,14 @@ export async function deleteConversation(id: string): Promise<void> {
 export async function clearAllHistory(): Promise<void> {
   await AsyncStorage.removeItem(CONVERSATIONS_KEY);
 }
+
+const PRO_KEY = 'is_pro';
+
+export async function getIsPro(): Promise<boolean> {
+  const raw = await AsyncStorage.getItem(PRO_KEY);
+  return raw === '1';
+}
+
+export async function setIsPro(value: boolean): Promise<void> {
+  await AsyncStorage.setItem(PRO_KEY, value ? '1' : '0');
+}

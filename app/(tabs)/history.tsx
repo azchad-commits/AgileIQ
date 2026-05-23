@@ -8,7 +8,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import {
   getConversations,
@@ -90,6 +90,7 @@ export default function HistoryScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.row}
+            onPress={() => router.push(`/conversation/${item.id}`)}
             onLongPress={() => handleDelete(item.id)}
             activeOpacity={0.8}
           >

@@ -94,7 +94,7 @@ const TOPICS: Topic[] = [
 
 export default function TopicsScreen() {
   const handlePrompt = (prompt: string) => {
-    router.navigate({ pathname: '/', params: { prompt } });
+    router.navigate({ pathname: '/', params: { prompt, t: Date.now().toString() } });
   };
 
   return (

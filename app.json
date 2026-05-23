@@ -10,7 +10,10 @@
     "backgroundColor": "#0F172A",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.agileiq.app"
+      "bundleIdentifier": "com.agileiq.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.agileiq.app",
@@ -29,6 +32,12 @@
       "expo-router",
       "expo-status-bar",
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "353f26f8-036d-4679-901b-656c7ea38e48"
+      }
+    }
   }
 }

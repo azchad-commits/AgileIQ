@@ -12,6 +12,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import * as Clipboard from 'expo-clipboard';
+import Markdown from 'react-native-markdown-display';
 import { Colors } from '../../constants/colors';
 import { SYSTEM_PROMPT } from '../../constants/systemPrompt';
 import { getApiKey } from '../../services/secureStorage';
@@ -19,6 +22,7 @@ import {
   checkAndIncrementDailyCount,
   getRemainingQuestions,
   saveConversation,
+  getIsPro,
 } from '../../services/storage';
 
 interface Message {
@@ -30,7 +34,7 @@ interface Message {
 const SUGGESTIONS = [
   'How do I run an effective Sprint Retrospective?',
   'What are the 8 stances of a Scrum Master?',
-  "How should we handle technical debt in the backlog?",
+  'How should we handle technical debt in the backlog?',
   "What's the difference between a Product Owner and a Project Manager?",
 ];
 
@@ -40,18 +44,29 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [remaining, setRemaining] = useState(5);
+  const [isPro, setIsProState] = useState(false);
   const conversationId = useRef(Date.now().toString());
+  const streamingIdRef = useRef<string | null>(null);
   const listRef = useRef<FlatList>(null);
-  const { prompt } = useLocalSearchParams<{ prompt?: string }>();
+
+  // Topics → Chat param handling — use timestamp key to fire exactly once per navigation
+  const { prompt, t } = useLocalSearchParams<{ prompt?: string; t?: string }>();
+  const lastParamKeyRef = useRef('');
 
   useEffect(() => {
     getRemainingQuestions().then(setRemaining);
+    getIsPro().then(setIsProState);
   }, []);
 
   useEffect(() => {
-    if (prompt) send(prompt);
+    const key = `${t ?? ''}::${prompt ?? ''}`;
+    if (prompt && key !== lastParamKeyRef.current) {
+      lastParamKeyRef.current = key;
+      send(prompt);
+    }
+  // send is stable within the param effect — intentional omission
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prompt]);
+  }, [prompt, t]);
 
   const send = useCallback(async (text: string) => {
     const content = text.trim();
@@ -63,11 +78,17 @@ export default function ChatScreen() {
       return;
     }
 
-    const allowed = await checkAndIncrementDailyCount();
-    if (!allowed) {
-      setError("You've used all 5 free questions today. Upgrade to Pro for unlimited access.");
-      return;
+    const pro = await getIsPro();
+    if (!pro) {
+      const allowed = await checkAndIncrementDailyCount();
+      if (!allowed) {
+        setError("You've used all 5 free questions today. Upgrade to Pro for unlimited access.");
+        return;
+      }
+      setRemaining(r => Math.max(0, r - 1));
     }
+
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const userMsg: Message = { id: Date.now().toString(), role: 'user', content };
     const nextMessages = [...messages, userMsg];
@@ -75,7 +96,9 @@ export default function ChatScreen() {
     setInput('');
     setError(null);
     setLoading(true);
-    setRemaining(r => Math.max(0, r - 1));
+
+    const assistantId = (Date.now() + 1).toString();
+    streamingIdRef.current = assistantId;
 
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -88,6 +111,7 @@ export default function ChatScreen() {
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 1024,
+          stream: true,
           system: SYSTEM_PROMPT,
           messages: nextMessages.map(m => ({ role: m.role, content: m.content })),
         }),
@@ -98,34 +122,64 @@ export default function ChatScreen() {
         throw new Error((err as any)?.error?.message ?? `API error ${res.status}`);
       }
 
-      const data = await res.json();
-      const assistantContent: string = data.content?.[0]?.text ?? '';
-      const assistantMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: assistantContent,
-      };
+      setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '' }]);
 
-      const finalMessages = [...nextMessages, assistantMsg];
-      setMessages(finalMessages);
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('Streaming not supported on this platform.');
 
+      const decoder = new TextDecoder();
+      let fullText = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') {
+              fullText += parsed.delta.text;
+              setMessages(prev =>
+                prev.map(m => m.id === assistantId ? { ...m, content: fullText } : m),
+              );
+            }
+          } catch {}
+        }
+      }
+
+      streamingIdRef.current = null;
+
+      const finalMessages = [
+        ...nextMessages,
+        { id: assistantId, role: 'assistant' as const, content: fullText },
+      ];
       await saveConversation({
         id: conversationId.current,
         title: content.slice(0, 60),
         date: new Date().toISOString(),
         messages: finalMessages.map(m => ({ role: m.role, content: m.content })),
       });
+
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Something went wrong. Check your connection.';
-      setError(msg);
+      setMessages(prev => prev.filter(m => m.id !== assistantId));
+      streamingIdRef.current = null;
+      const msg = e instanceof Error ? e.message : 'Something went wrong.';
+      const isOffline = msg.toLowerCase().includes('network request failed')
+        || msg.toLowerCase().includes('failed to fetch');
+      setError(isOffline ? 'No internet connection. Check your network and try again.' : msg);
     } finally {
       setLoading(false);
     }
   }, [loading, messages]);
 
   const handleSend = useCallback(() => send(input), [send, input]);
-
-  const handleSuggestion = useCallback((text: string) => send(text), [send]);
 
   const startNewChat = useCallback(() => {
     setMessages([]);
@@ -142,12 +196,15 @@ export default function ChatScreen() {
           <Text style={styles.headerSub}>AI Agile Coach</Text>
         </View>
         <View style={styles.headerRight}>
-          <Text style={[styles.remainingBadge, remaining <= 1 && styles.remainingLow]}>
-            {remaining}/5 free today
-          </Text>
+          {!isPro && (
+            <Text style={[styles.remainingBadge, remaining <= 1 && styles.remainingLow]}>
+              {remaining}/5 free today
+            </Text>
+          )}
+          {isPro && <Text style={styles.proBadge}>Pro ✦</Text>}
           {messages.length > 0 && (
             <TouchableOpacity onPress={startNewChat} style={styles.newChatBtn} activeOpacity={0.7}>
-              <Text style={styles.newChatText}>+ New Chat</Text>
+              <Text style={styles.newChatText}>+ New</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -159,8 +216,13 @@ export default function ChatScreen() {
         keyExtractor={m => m.id}
         contentContainerStyle={[styles.list, messages.length === 0 && styles.listEmpty]}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
-        ListEmptyComponent={<EmptyState onSuggestion={handleSuggestion} />}
-        renderItem={({ item }) => <MessageBubble message={item} />}
+        ListEmptyComponent={<EmptyState onSuggestion={s => send(s)} />}
+        renderItem={({ item }) => (
+          <MessageBubble
+            message={item}
+            isStreaming={loading && item.id === streamingIdRef.current}
+          />
+        )}
       />
 
       {!!error && (
@@ -169,9 +231,7 @@ export default function ChatScreen() {
         </View>
       )}
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <SafeAreaView edges={['bottom']} style={styles.inputWrapper}>
           <TextInput
             style={styles.input}
@@ -202,17 +262,31 @@ export default function ChatScreen() {
   );
 }
 
-function MessageBubble({ message }: { message: Message }) {
+function MessageBubble({ message, isStreaming }: { message: Message; isStreaming: boolean }) {
   const isUser = message.role === 'user';
+
+  const handleLongPress = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await Clipboard.setStringAsync(message.content);
+  };
+
   return (
-    <View style={[styles.bubbleRow, isUser && styles.bubbleRowUser]}>
+    <TouchableOpacity
+      onLongPress={handleLongPress}
+      activeOpacity={0.85}
+      style={[styles.bubbleRow, isUser && styles.bubbleRowUser]}
+    >
       <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
         {!isUser && <Text style={styles.senderLabel}>AgileIQ</Text>}
-        <Text style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant]}>
-          {message.content}
-        </Text>
+        {isUser ? (
+          <Text style={styles.bubbleTextUser}>{message.content}</Text>
+        ) : (
+          <Markdown style={markdownStyles}>
+            {message.content + (isStreaming && message.content ? '▌' : '')}
+          </Markdown>
+        )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -238,11 +312,61 @@ function EmptyState({ onSuggestion }: { onSuggestion: (text: string) => void }) 
   );
 }
 
+const markdownStyles = StyleSheet.create({
+  body: {
+    color: Colors.text,
+    fontSize: 16,
+    lineHeight: 23,
+    backgroundColor: 'transparent',
+  } as any,
+  paragraph: {
+    marginTop: 0,
+    marginBottom: 6,
+    color: Colors.text,
+  } as any,
+  heading1: { color: Colors.white, fontSize: 19, fontWeight: '700', marginVertical: 6 } as any,
+  heading2: { color: Colors.white, fontSize: 17, fontWeight: '700', marginVertical: 4 } as any,
+  heading3: { color: Colors.teal, fontSize: 16, fontWeight: '700', marginVertical: 4 } as any,
+  strong: { fontWeight: '700', color: Colors.white } as any,
+  em: { fontStyle: 'italic' } as any,
+  bullet_list: { marginLeft: 0 } as any,
+  ordered_list: { marginLeft: 0 } as any,
+  list_item: { color: Colors.text, fontSize: 16, lineHeight: 23 } as any,
+  bullet_list_icon: { color: Colors.teal, marginRight: 6 } as any,
+  ordered_list_icon: { color: Colors.teal, marginRight: 6 } as any,
+  code_inline: {
+    backgroundColor: Colors.navyMid,
+    color: Colors.tealLight,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontSize: 13,
+    borderRadius: 4,
+    paddingHorizontal: 4,
+  } as any,
+  fence: {
+    backgroundColor: Colors.navyMid,
+    borderRadius: 8,
+    padding: 12,
+    marginVertical: 8,
+  } as any,
+  code_block: {
+    color: Colors.tealLight,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontSize: 13,
+    backgroundColor: 'transparent',
+  } as any,
+  blockquote: {
+    backgroundColor: Colors.navyMid,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.teal,
+    paddingLeft: 12,
+    paddingVertical: 6,
+    marginVertical: 6,
+  } as any,
+  hr: { backgroundColor: Colors.border, height: 1, marginVertical: 10 } as any,
+});
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -252,29 +376,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: Colors.teal,
-    letterSpacing: -0.3,
-  },
-  headerSub: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 1,
-  },
-  headerRight: {
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  remainingBadge: {
-    fontSize: 11,
-    color: Colors.grayDark,
-    fontWeight: '500',
-  },
-  remainingLow: {
-    color: Colors.error,
-  },
+  headerTitle: { fontSize: 22, fontWeight: '700', color: Colors.teal, letterSpacing: -0.3 },
+  headerSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 1 },
+  headerRight: { alignItems: 'flex-end', gap: 8 },
+  remainingBadge: { fontSize: 11, color: Colors.grayDark, fontWeight: '500' },
+  remainingLow: { color: Colors.error },
+  proBadge: { fontSize: 12, color: Colors.teal, fontWeight: '700' },
   newChatBtn: {
     paddingHorizontal: 12,
     paddingVertical: 5,
@@ -282,56 +389,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.teal,
   },
-  newChatText: {
-    fontSize: 12,
-    color: Colors.teal,
-    fontWeight: '600',
-  },
-  list: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
-    gap: 12,
-  },
-  listEmpty: {
-    flex: 1,
-  },
-  bubbleRow: {
-    alignItems: 'flex-start',
-  },
-  bubbleRowUser: {
-    alignItems: 'flex-end',
-  },
-  bubble: {
-    maxWidth: '84%',
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  bubbleUser: {
-    backgroundColor: Colors.teal,
-    borderBottomRightRadius: 4,
-  },
-  bubbleAssistant: {
-    backgroundColor: Colors.surface,
-    borderBottomLeftRadius: 4,
-  },
-  senderLabel: {
-    fontSize: 11,
-    color: Colors.teal,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  bubbleText: {
-    fontSize: 16,
-    lineHeight: 23,
-  },
-  bubbleTextUser: {
-    color: Colors.white,
-  },
-  bubbleTextAssistant: {
-    color: Colors.text,
-  },
+  newChatText: { fontSize: 12, color: Colors.teal, fontWeight: '600' },
+  list: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 12 },
+  listEmpty: { flex: 1 },
+  bubbleRow: { alignItems: 'flex-start' },
+  bubbleRowUser: { alignItems: 'flex-end' },
+  bubble: { maxWidth: '84%', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 12 },
+  bubbleUser: { backgroundColor: Colors.teal, borderBottomRightRadius: 4 },
+  bubbleAssistant: { backgroundColor: Colors.surface, borderBottomLeftRadius: 4 },
+  senderLabel: { fontSize: 11, color: Colors.teal, fontWeight: '700', marginBottom: 4 },
+  bubbleTextUser: { fontSize: 16, lineHeight: 23, color: Colors.white },
   errorBanner: {
     marginHorizontal: 16,
     marginBottom: 8,
@@ -341,11 +408,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.error,
   },
-  errorText: {
-    color: Colors.error,
-    fontSize: 14,
-    lineHeight: 20,
-  },
+  errorText: { color: Colors.error, fontSize: 14, lineHeight: 20 },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -378,28 +441,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sendBtnDisabled: {
-    backgroundColor: Colors.navyMid,
-  },
-  sendArrow: {
-    color: Colors.white,
-    fontSize: 22,
-    fontWeight: '700',
-    marginTop: -2,
-  },
-  empty: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 48,
-    alignItems: 'center',
-  },
-  emptyTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: Colors.text,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
+  sendBtnDisabled: { backgroundColor: Colors.navyMid },
+  sendArrow: { color: Colors.white, fontSize: 22, fontWeight: '700', marginTop: -2 },
+  empty: { flex: 1, paddingHorizontal: 24, paddingTop: 48, alignItems: 'center' },
+  emptyTitle: { fontSize: 26, fontWeight: '700', color: Colors.text, textAlign: 'center', marginBottom: 12 },
   emptySub: {
     fontSize: 16,
     color: Colors.textSecondary,
@@ -419,16 +464,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  suggestionText: {
-    flex: 1,
-    color: Colors.textSecondary,
-    fontSize: 15,
-    lineHeight: 21,
-  },
-  suggestionArrow: {
-    color: Colors.teal,
-    fontSize: 22,
-    marginLeft: 8,
-    fontWeight: '300',
-  },
+  suggestionText: { flex: 1, color: Colors.textSecondary, fontSize: 15, lineHeight: 21 },
+  suggestionArrow: { color: Colors.teal, fontSize: 22, marginLeft: 8, fontWeight: '300' },
 });

@@ -6,13 +6,18 @@
     "@expo/vector-icons": "^15.1.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~56.0.3",
+    "expo-clipboard": "~56.0.3",
     "expo-constants": "~56.0.14",
     "expo-dev-client": "~56.0.14",
+    "expo-haptics": "~56.0.3",
+    "expo-linking": "~56.0.11",
     "expo-router": "~56.2.5",
     "expo-secure-store": "~56.0.4",
     "expo-status-bar": "~56.0.4",
+    "expo-system-ui": "~56.0.5",
     "react": "19.2.3",
     "react-native": "0.85.3",
+    "react-native-markdown-display": "^7.0.2",
     "react-native-purchases": "^10.1.2",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "^4.25.1"
@@ -23,8 +28,8 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web"
   },
   "private": true
