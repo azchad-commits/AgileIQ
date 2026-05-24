@@ -20,6 +20,7 @@
     "react-native": "0.85.3",
     "react-native-markdown-display": "^7.0.2",
     "react-native-purchases": "^10.1.2",
+    "react-native-purchases-ui": "^10.1.2",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "^4.25.1"
   },

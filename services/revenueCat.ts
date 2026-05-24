@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { setIsPro } from './storage';
 
 // Add your keys from app.revenuecat.com → Project Settings → API Keys
-const RC_IOS_KEY = '';
+const RC_IOS_KEY = 'test_nwxOnjRRreLIzmRbKcjnvEtbrTL';
 const RC_ANDROID_KEY = '';
 const PRO_ENTITLEMENT_ID = 'pro';
 
