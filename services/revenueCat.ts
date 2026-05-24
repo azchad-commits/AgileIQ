@@ -1,4 +1,5 @@
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
+import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import { Platform } from 'react-native';
 import { setIsPro } from './storage';
 
@@ -46,6 +47,20 @@ export async function purchasePro(): Promise<{ success: boolean; cancelled: bool
   } catch (e: any) {
     if (e.userCancelled) return { success: false, cancelled: true };
     throw e;
+  }
+}
+
+export async function presentProPaywall(): Promise<boolean> {
+  if (!isConfigured()) return false;
+  try {
+    const result = await RevenueCatUI.presentPaywallIfNeeded({
+      requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
+    });
+    const purchased = result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
+    if (purchased) await setIsPro(true);
+    return purchased;
+  } catch {
+    return false;
   }
 }
 

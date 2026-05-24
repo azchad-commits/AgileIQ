@@ -67,6 +67,16 @@ export default function ConversationDetailScreen() {
           <DetailBubble role={item.role} content={item.content} />
         )}
       />
+
+      <SafeAreaView edges={['bottom']} style={styles.footer}>
+        <TouchableOpacity
+          style={styles.continueBtn}
+          onPress={() => router.navigate({ pathname: '/', params: { continueId: conversation.id } })}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.continueBtnText}>Continue Conversation</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
     </SafeAreaView>
   );
 }
@@ -162,4 +172,21 @@ const styles = StyleSheet.create({
   bubbleTextUser: { fontSize: 16, lineHeight: 23, color: Colors.white },
   notFound: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   notFoundText: { color: Colors.textSecondary, fontSize: 16 },
+  footer: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.background,
+  },
+  continueBtn: {
+    backgroundColor: Colors.teal,
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+  },
+  continueBtnText: {
+    color: Colors.white,
+    fontWeight: '700',
+    fontSize: 16,
+  },
 });

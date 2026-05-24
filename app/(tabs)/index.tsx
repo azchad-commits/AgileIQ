@@ -5,7 +5,7 @@ import {
   TextInput,
   FlatList,
   TouchableOpacity,
-  ActivityIndicator,
+  Animated,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -23,7 +23,9 @@ import {
   getRemainingQuestions,
   saveConversation,
   getIsPro,
+  getConversations,
 } from '../../services/storage';
+import { presentProPaywall } from '../../services/revenueCat';
 
 interface Message {
   id: string;
@@ -45,32 +47,59 @@ export default function ChatScreen() {
   const [error, setError] = useState<string | null>(null);
   const [remaining, setRemaining] = useState(5);
   const [isPro, setIsProState] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
   const conversationId = useRef(Date.now().toString());
   const streamingIdRef = useRef<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const listRef = useRef<FlatList>(null);
 
-  // Topics → Chat param handling — use timestamp key to fire exactly once per navigation
-  const { prompt, t } = useLocalSearchParams<{ prompt?: string; t?: string }>();
+  // Ref mirrors — updated every render so `send` (stable []) always sees current values
+  const messagesRef = useRef<Message[]>([]);
+  const loadingRef = useRef(false);
+  messagesRef.current = messages;
+  loadingRef.current = loading;
+
+  const { prompt, t, continueId } = useLocalSearchParams<{ prompt?: string; t?: string; continueId?: string }>();
   const lastParamKeyRef = useRef('');
+  const lastContinueIdRef = useRef('');
 
   useEffect(() => {
     getRemainingQuestions().then(setRemaining);
     getIsPro().then(setIsProState);
   }, []);
 
+  // Continue an existing conversation
+  useEffect(() => {
+    if (!continueId || continueId === lastContinueIdRef.current) return;
+    lastContinueIdRef.current = continueId;
+    getConversations().then(list => {
+      const conv = list.find(c => c.id === continueId);
+      if (!conv) return;
+      setMessages(conv.messages.map((m, i) => ({ id: String(i), role: m.role, content: m.content })));
+      conversationId.current = conv.id;
+    });
+  }, [continueId]);
+
+  // Topics → Chat param
   useEffect(() => {
     const key = `${t ?? ''}::${prompt ?? ''}`;
     if (prompt && key !== lastParamKeyRef.current) {
       lastParamKeyRef.current = key;
       send(prompt);
     }
-  // send is stable within the param effect — intentional omission
+  // send is stable ([] deps) — intentional omission
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prompt, t]);
 
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 1500);
+  }, []);
+
   const send = useCallback(async (text: string) => {
     const content = text.trim();
-    if (!content || loading) return;
+    if (!content || loadingRef.current) return;
 
     const apiKey = await getApiKey();
     if (!apiKey) {
@@ -82,7 +111,8 @@ export default function ChatScreen() {
     if (!pro) {
       const allowed = await checkAndIncrementDailyCount();
       if (!allowed) {
-        setError("You've used all 5 free questions today. Upgrade to Pro for unlimited access.");
+        const upgraded = await presentProPaywall();
+        if (upgraded) setIsProState(true);
         return;
       }
       setRemaining(r => Math.max(0, r - 1));
@@ -91,7 +121,7 @@ export default function ChatScreen() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const userMsg: Message = { id: Date.now().toString(), role: 'user', content };
-    const nextMessages = [...messages, userMsg];
+    const nextMessages = [...messagesRef.current, userMsg];
     setMessages(nextMessages);
     setInput('');
     setError(null);
@@ -100,9 +130,13 @@ export default function ChatScreen() {
     const assistantId = (Date.now() + 1).toString();
     streamingIdRef.current = assistantId;
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
@@ -110,7 +144,7 @@ export default function ChatScreen() {
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
-          max_tokens: 1024,
+          max_tokens: 2048,
           stream: true,
           system: SYSTEM_PROMPT,
           messages: nextMessages.map(m => ({ role: m.role, content: m.content })),
@@ -168,18 +202,26 @@ export default function ChatScreen() {
       });
 
     } catch (e: unknown) {
-      setMessages(prev => prev.filter(m => m.id !== assistantId));
+      const isAbort = e instanceof Error && e.name === 'AbortError';
+      if (!isAbort) {
+        setMessages(prev => prev.filter(m => m.id !== assistantId));
+        const msg = e instanceof Error ? e.message : 'Something went wrong.';
+        const isOffline = msg.toLowerCase().includes('network request failed')
+          || msg.toLowerCase().includes('failed to fetch');
+        setError(isOffline ? 'No internet connection. Check your network and try again.' : msg);
+      }
       streamingIdRef.current = null;
-      const msg = e instanceof Error ? e.message : 'Something went wrong.';
-      const isOffline = msg.toLowerCase().includes('network request failed')
-        || msg.toLowerCase().includes('failed to fetch');
-      setError(isOffline ? 'No internet connection. Check your network and try again.' : msg);
     } finally {
       setLoading(false);
+      abortControllerRef.current = null;
     }
-  }, [loading, messages]);
+  }, []);
 
   const handleSend = useCallback(() => send(input), [send, input]);
+
+  const handleCancel = useCallback(() => {
+    abortControllerRef.current?.abort();
+  }, []);
 
   const startNewChat = useCallback(() => {
     setMessages([]);
@@ -221,9 +263,18 @@ export default function ChatScreen() {
           <MessageBubble
             message={item}
             isStreaming={loading && item.id === streamingIdRef.current}
+            onCopy={() => showToast('Copied')}
           />
         )}
       />
+
+      {!!toast && (
+        <View style={styles.toastWrapper} pointerEvents="none">
+          <View style={styles.toast}>
+            <Text style={styles.toastText}>{toast}</Text>
+          </View>
+        </View>
+      )}
 
       {!!error && (
         <View style={styles.errorBanner}>
@@ -245,29 +296,75 @@ export default function ChatScreen() {
             blurOnSubmit
             onSubmitEditing={handleSend}
           />
-          <TouchableOpacity
-            style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
-            onPress={handleSend}
-            disabled={!input.trim() || loading}
-            activeOpacity={0.8}
-          >
-            {loading
-              ? <ActivityIndicator size="small" color={Colors.white} />
-              : <Text style={styles.sendArrow}>↑</Text>
-            }
-          </TouchableOpacity>
+          {loading ? (
+            <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} activeOpacity={0.8}>
+              <Text style={styles.cancelIcon}>✕</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
+              onPress={handleSend}
+              disabled={!input.trim()}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.sendArrow}>↑</Text>
+            </TouchableOpacity>
+          )}
         </SafeAreaView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-function MessageBubble({ message, isStreaming }: { message: Message; isStreaming: boolean }) {
+function TypingDots() {
+  const dot1 = useRef(new Animated.Value(0.3)).current;
+  const dot2 = useRef(new Animated.Value(0.3)).current;
+  const dot3 = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const seq = (dot: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, { toValue: 1, duration: 250, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0.3, duration: 250, useNativeDriver: true }),
+          Animated.delay(Math.max(0, 480 - delay)),
+        ]),
+      );
+    const anim = Animated.parallel([seq(dot1, 0), seq(dot2, 160), seq(dot3, 320)]);
+    anim.start();
+    return () => anim.stop();
+  }, [dot1, dot2, dot3]);
+
+  return (
+    <View style={dotStyles.row}>
+      <Animated.View style={[dotStyles.dot, { opacity: dot1 }]} />
+      <Animated.View style={[dotStyles.dot, { opacity: dot2 }]} />
+      <Animated.View style={[dotStyles.dot, { opacity: dot3 }]} />
+    </View>
+  );
+}
+
+const dotStyles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: 4 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.teal },
+});
+
+function MessageBubble({
+  message,
+  isStreaming,
+  onCopy,
+}: {
+  message: Message;
+  isStreaming: boolean;
+  onCopy: () => void;
+}) {
   const isUser = message.role === 'user';
 
   const handleLongPress = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await Clipboard.setStringAsync(message.content);
+    onCopy();
   };
 
   return (
@@ -280,9 +377,11 @@ function MessageBubble({ message, isStreaming }: { message: Message; isStreaming
         {!isUser && <Text style={styles.senderLabel}>AgileIQ</Text>}
         {isUser ? (
           <Text style={styles.bubbleTextUser}>{message.content}</Text>
+        ) : isStreaming && !message.content ? (
+          <TypingDots />
         ) : (
           <Markdown style={markdownStyles}>
-            {message.content + (isStreaming && message.content ? '▌' : '')}
+            {message.content + (isStreaming ? '▌' : '')}
           </Markdown>
         )}
       </View>
@@ -399,6 +498,21 @@ const styles = StyleSheet.create({
   bubbleAssistant: { backgroundColor: Colors.surface, borderBottomLeftRadius: 4 },
   senderLabel: { fontSize: 11, color: Colors.teal, fontWeight: '700', marginBottom: 4 },
   bubbleTextUser: { fontSize: 16, lineHeight: 23, color: Colors.white },
+  toastWrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 110,
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  toast: {
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
+  },
+  toastText: { color: Colors.white, fontSize: 14, fontWeight: '500' },
   errorBanner: {
     marginHorizontal: 16,
     marginBottom: 8,
@@ -443,6 +557,15 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: { backgroundColor: Colors.navyMid },
   sendArrow: { color: Colors.white, fontSize: 22, fontWeight: '700', marginTop: -2 },
+  cancelBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelIcon: { color: Colors.white, fontSize: 16, fontWeight: '700' },
   empty: { flex: 1, paddingHorizontal: 24, paddingTop: 48, alignItems: 'center' },
   emptyTitle: { fontSize: 26, fontWeight: '700', color: Colors.text, textAlign: 'center', marginBottom: 12 },
   emptySub: {

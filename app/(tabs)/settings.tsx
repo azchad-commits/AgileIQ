@@ -140,8 +140,6 @@ export default function SettingsScreen() {
                 <View style={styles.divider} />
                 <View style={styles.proFeatures}>
                   <Text style={styles.proLine}>✓  Unlimited questions</Text>
-                  <Text style={styles.proLine}>✓  Priority response speed</Text>
-                  <Text style={styles.proLine}>✓  Conversation history sync</Text>
                   <Text style={styles.proPrice}>$9.99 / month</Text>
                   <TouchableOpacity onPress={handleRestore} disabled={restoring} style={styles.restoreBtn}>
                     {restoring

@@ -97,7 +97,7 @@ export default function HistoryScreen() {
             <View style={styles.rowContent}>
               <Text style={styles.rowTitle} numberOfLines={2}>{item.title}</Text>
               <Text style={styles.rowMeta}>
-                {formatDate(item.date)} · {formatTime(item.date)} · {item.messages.length / 2 | 0} exchange{item.messages.length !== 2 ? 's' : ''}
+                {formatDate(item.date)} · {formatTime(item.date)} · {item.messages.filter(m => m.role === 'user').length} exchange{item.messages.filter(m => m.role === 'user').length !== 1 ? 's' : ''}
               </Text>
             </View>
             <Text style={styles.rowArrow}>›</Text>

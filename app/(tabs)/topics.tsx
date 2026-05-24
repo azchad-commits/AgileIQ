@@ -4,6 +4,7 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
+  LayoutAnimation,
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -124,7 +125,10 @@ function TopicCard({ topic, onPrompt }: { topic: Topic; onPrompt: (p: string) =>
     <View style={styles.card}>
       <TouchableOpacity
         style={styles.cardHeader}
-        onPress={() => setExpanded(e => !e)}
+        onPress={() => {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setExpanded(e => !e);
+        }}
         activeOpacity={0.8}
       >
         <View style={[styles.iconBadge, { backgroundColor: topic.color + '22' }]}>
