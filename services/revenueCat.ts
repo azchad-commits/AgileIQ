@@ -3,18 +3,26 @@ import { Platform } from 'react-native';
 import { setIsPro } from './storage';
 
 // Add your keys from app.revenuecat.com → Project Settings → API Keys
-const RC_IOS_KEY = 'appl_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
-const RC_ANDROID_KEY = 'goog_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
+const RC_IOS_KEY = '';
+const RC_ANDROID_KEY = '';
 const PRO_ENTITLEMENT_ID = 'pro';
 
+function getApiKey(): string {
+  return Platform.OS === 'ios' ? RC_IOS_KEY : RC_ANDROID_KEY;
+}
+
+function isConfigured(): boolean {
+  return getApiKey().length > 0;
+}
+
 export function initializePurchases(): void {
+  if (!isConfigured()) return;
   Purchases.setLogLevel(LOG_LEVEL.WARN);
-  Purchases.configure({
-    apiKey: Platform.OS === 'ios' ? RC_IOS_KEY : RC_ANDROID_KEY,
-  });
+  Purchases.configure({ apiKey: getApiKey() });
 }
 
 export async function syncProStatus(): Promise<boolean> {
+  if (!isConfigured()) return false;
   try {
     const info = await Purchases.getCustomerInfo();
     const isPro = info.entitlements.active[PRO_ENTITLEMENT_ID] !== undefined;
@@ -26,10 +34,11 @@ export async function syncProStatus(): Promise<boolean> {
 }
 
 export async function purchasePro(): Promise<{ success: boolean; cancelled: boolean }> {
+  if (!isConfigured()) throw new Error('RevenueCat not configured. Add your API key to services/revenueCat.ts.');
   try {
     const offerings = await Purchases.getOfferings();
     const monthly = offerings.current?.monthly;
-    if (!monthly) throw new Error('Pro offering not configured. Set it up in RevenueCat dashboard.');
+    if (!monthly) throw new Error('Pro offering not found. Configure it in your RevenueCat dashboard.');
     const { customerInfo } = await Purchases.purchasePackage(monthly);
     const isPro = customerInfo.entitlements.active[PRO_ENTITLEMENT_ID] !== undefined;
     await setIsPro(isPro);
@@ -41,6 +50,7 @@ export async function purchasePro(): Promise<{ success: boolean; cancelled: bool
 }
 
 export async function restorePurchases(): Promise<boolean> {
+  if (!isConfigured()) return false;
   try {
     const info = await Purchases.restorePurchases();
     const isPro = info.entitlements.active[PRO_ENTITLEMENT_ID] !== undefined;
