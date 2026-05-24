@@ -14,24 +14,30 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { getApiKey, setApiKey, deleteApiKey } from '../../services/secureStorage';
-import { getRemainingQuestions, getIsPro } from '../../services/storage';
+import { getRemainingQuestions, getIsPro, FREE_TIER_LIMIT, PRO_TIER_LIMIT } from '../../services/storage';
 import { purchasePro, restorePurchases, syncProStatus } from '../../services/revenueCat';
 
 export default function SettingsScreen() {
   const [apiKey, setApiKeyState] = useState('');
   const [savedKey, setSavedKey] = useState<string | null>(null);
-  const [remaining, setRemaining] = useState(5);
+  const [remaining, setRemaining] = useState(FREE_TIER_LIMIT);
   const [isPro, setIsProState] = useState(false);
+  const [isByok, setIsByok] = useState(false);
   const [saving, setSaving] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
   const load = useCallback(async () => {
-    const [key, rem, pro] = await Promise.all([getApiKey(), getRemainingQuestions(), getIsPro()]);
+    const [key, pro] = await Promise.all([getApiKey(), getIsPro()]);
+    const byok = !!key;
     setSavedKey(key);
-    setRemaining(rem);
     setIsProState(pro);
+    setIsByok(byok);
     if (key) setApiKeyState(key);
+    if (!byok) {
+      const limit = pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
+      setRemaining(await getRemainingQuestions(limit));
+    }
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -116,12 +122,18 @@ export default function SettingsScreen() {
           <View style={styles.card}>
             <View style={styles.planRow}>
               <View>
-                <Text style={styles.planName}>{isPro ? 'Pro ✦' : 'Free'}</Text>
+                <Text style={styles.planName}>
+                  {isByok ? 'Pro ✦' : isPro ? 'Pro ✦' : 'Free'}
+                </Text>
                 <Text style={styles.planDetail}>
-                  {isPro ? 'Unlimited questions' : `${remaining} question${remaining !== 1 ? 's' : ''} remaining today`}
+                  {isByok
+                    ? 'Unlimited · using your own API key'
+                    : isPro
+                    ? `${remaining}/${PRO_TIER_LIMIT} questions today`
+                    : `${remaining}/${FREE_TIER_LIMIT} questions today`}
                 </Text>
               </View>
-              {!isPro && (
+              {!isByok && !isPro && (
                 <TouchableOpacity
                   style={[styles.upgradeBtn, purchasing && styles.upgradeBtnDisabled]}
                   onPress={handleUpgrade}
@@ -135,11 +147,12 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
               )}
             </View>
-            {!isPro && (
+            {!isByok && !isPro && (
               <>
                 <View style={styles.divider} />
                 <View style={styles.proFeatures}>
-                  <Text style={styles.proLine}>✓  Unlimited questions</Text>
+                  <Text style={styles.proLine}>✓  30 questions / day</Text>
+                  <Text style={styles.proLine}>✓  Unlimited with your own API key</Text>
                   <Text style={styles.proPrice}>$9.99 / month</Text>
                   <TouchableOpacity onPress={handleRestore} disabled={restoring} style={styles.restoreBtn}>
                     {restoring

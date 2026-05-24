@@ -24,6 +24,8 @@ import {
   saveConversation,
   getIsPro,
   getConversations,
+  FREE_TIER_LIMIT,
+  PRO_TIER_LIMIT,
 } from '../../services/storage';
 import { presentProPaywall } from '../../services/revenueCat';
 
@@ -45,8 +47,9 @@ export default function ChatScreen() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [remaining, setRemaining] = useState(5);
+  const [remaining, setRemaining] = useState(FREE_TIER_LIMIT);
   const [isPro, setIsProState] = useState(false);
+  const [isByok, setIsByok] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const conversationId = useRef(Date.now().toString());
@@ -65,8 +68,16 @@ export default function ChatScreen() {
   const lastContinueIdRef = useRef('');
 
   useEffect(() => {
-    getRemainingQuestions().then(setRemaining);
-    getIsPro().then(setIsProState);
+    (async () => {
+      const [key, pro] = await Promise.all([getApiKey(), getIsPro()]);
+      const byok = !!key;
+      setIsByok(byok);
+      setIsProState(pro);
+      if (!byok) {
+        const limit = pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
+        setRemaining(await getRemainingQuestions(limit));
+      }
+    })();
   }, []);
 
   // Continue an existing conversation
@@ -107,12 +118,19 @@ export default function ChatScreen() {
       return;
     }
 
-    const pro = await getIsPro();
-    if (!pro) {
-      const allowed = await checkAndIncrementDailyCount();
+    // BYOK: user pays Anthropic directly → unlimited, skip all daily limits
+    const byok = !!apiKey;
+    if (!byok) {
+      const pro = await getIsPro();
+      const limit = pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
+      const allowed = await checkAndIncrementDailyCount(limit);
       if (!allowed) {
-        const upgraded = await presentProPaywall();
-        if (upgraded) setIsProState(true);
+        if (!pro) {
+          const upgraded = await presentProPaywall();
+          if (upgraded) setIsProState(true);
+        } else {
+          setError(`You've reached your ${PRO_TIER_LIMIT} question daily limit. Come back tomorrow!`);
+        }
         return;
       }
       setRemaining(r => Math.max(0, r - 1));
@@ -238,12 +256,13 @@ export default function ChatScreen() {
           <Text style={styles.headerSub}>AI Agile Coach</Text>
         </View>
         <View style={styles.headerRight}>
-          {!isPro && (
+          {(isByok || isPro) ? (
+            <Text style={styles.proBadge}>Pro ✦</Text>
+          ) : (
             <Text style={[styles.remainingBadge, remaining <= 1 && styles.remainingLow]}>
-              {remaining}/5 free today
+              {remaining}/{FREE_TIER_LIMIT} free today
             </Text>
           )}
-          {isPro && <Text style={styles.proBadge}>Pro ✦</Text>}
           {messages.length > 0 && (
             <TouchableOpacity onPress={startNewChat} style={styles.newChatBtn} activeOpacity={0.7}>
               <Text style={styles.newChatText}>+ New</Text>

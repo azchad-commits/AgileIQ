@@ -18,7 +18,7 @@ import * as Clipboard from 'expo-clipboard';
 import Markdown from 'react-native-markdown-display';
 import { Colors } from '../../constants/colors';
 import { getApiKey } from '../../services/secureStorage';
-import { getIsPro, checkAndIncrementDailyCount, saveConversation } from '../../services/storage';
+import { getIsPro, checkAndIncrementDailyCount, saveConversation, FREE_TIER_LIMIT, PRO_TIER_LIMIT } from '../../services/storage';
 import { presentProPaywall } from '../../services/revenueCat';
 
 const ANALYSIS_SYSTEM_PROMPT =
@@ -100,12 +100,20 @@ export default function AnalyzeScreen() {
       return;
     }
 
-    const isPro = await getIsPro();
-    if (!isPro) {
-      const allowed = await checkAndIncrementDailyCount();
+    // BYOK: user pays Anthropic directly → unlimited
+    const byok = !!apiKey;
+    if (!byok) {
+      const pro = await getIsPro();
+      const limit = pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
+      const allowed = await checkAndIncrementDailyCount(limit);
       if (!allowed) {
-        const upgraded = await presentProPaywall();
-        if (!upgraded) return;
+        if (!pro) {
+          const upgraded = await presentProPaywall();
+          if (!upgraded) return;
+        } else {
+          setError(`You've reached your ${PRO_TIER_LIMIT} question daily limit. Come back tomorrow!`);
+          return;
+        }
       }
     }
 

@@ -2,8 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DAILY_COUNT_KEY = 'daily_question_count';
 const CONVERSATIONS_KEY = 'conversations';
-const FREE_TIER_LIMIT = 5;
 const MAX_CONVERSATIONS = 50;
+
+export const FREE_TIER_LIMIT = 5;
+export const PRO_TIER_LIMIT = 30;
 
 interface DailyCount {
   date: string;
@@ -26,7 +28,7 @@ function today(): string {
   return new Date().toISOString().split('T')[0];
 }
 
-export async function checkAndIncrementDailyCount(): Promise<boolean> {
+export async function checkAndIncrementDailyCount(limit = FREE_TIER_LIMIT): Promise<boolean> {
   const raw = await AsyncStorage.getItem(DAILY_COUNT_KEY);
   const stored: DailyCount = raw ? JSON.parse(raw) : { date: today(), count: 0 };
 
@@ -35,7 +37,7 @@ export async function checkAndIncrementDailyCount(): Promise<boolean> {
     return true;
   }
 
-  if (stored.count >= FREE_TIER_LIMIT) return false;
+  if (stored.count >= limit) return false;
 
   await AsyncStorage.setItem(
     DAILY_COUNT_KEY,
@@ -44,12 +46,12 @@ export async function checkAndIncrementDailyCount(): Promise<boolean> {
   return true;
 }
 
-export async function getRemainingQuestions(): Promise<number> {
+export async function getRemainingQuestions(limit = FREE_TIER_LIMIT): Promise<number> {
   const raw = await AsyncStorage.getItem(DAILY_COUNT_KEY);
-  if (!raw) return FREE_TIER_LIMIT;
+  if (!raw) return limit;
   const stored: DailyCount = JSON.parse(raw);
-  if (stored.date !== today()) return FREE_TIER_LIMIT;
-  return Math.max(0, FREE_TIER_LIMIT - stored.count);
+  if (stored.date !== today()) return limit;
+  return Math.max(0, limit - stored.count);
 }
 
 export async function saveConversation(conversation: Conversation): Promise<void> {
