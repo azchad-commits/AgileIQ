@@ -12,9 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import Markdown from 'react-native-markdown-display';
@@ -24,7 +22,7 @@ import { getIsPro, checkAndIncrementDailyCount, saveConversation } from '../../s
 import { presentProPaywall } from '../../services/revenueCat';
 
 const ANALYSIS_SYSTEM_PROMPT =
-  'You are AgileIQ, an expert Agile coach. The user has shared a document or image — a Jira board, project plan, sprint roadmap, backlog, or team report. Analyze it and provide specific, actionable coaching recommendations. Reference concrete details from the document. Use headers to organize your response.';
+  'You are AgileIQ, an expert Agile coach. The user has shared a screenshot — a Jira board, project plan, sprint roadmap, backlog, or team report. Analyze it and provide specific, actionable coaching recommendations. Reference concrete details from the image. Use headers to organize your response.';
 
 const QUICK_PROMPTS = [
   'Identify Agile anti-patterns and how to fix them',
@@ -35,35 +33,30 @@ const QUICK_PROMPTS = [
 ];
 
 const HOW_TO_TIPS: Array<[string, string, string]> = [
-  ['📋', 'Jira CSV export', 'File → Export issues → CSV'],
-  ['🗂️', 'Board screenshot', 'Screenshot your sprint or kanban board'],
-  ['📊', 'Sprint report / PDF', 'Sprint review or retrospective doc'],
-  ['📌', 'Roadmap image', 'Screenshot timeline or roadmap slide'],
+  ['📋', 'Jira board screenshot', 'Screenshot your sprint or backlog view'],
+  ['🗂️', 'Kanban board', 'Screenshot your kanban columns and cards'],
+  ['📊', 'Roadmap or timeline', 'Screenshot your roadmap slide or view'],
+  ['📌', 'Retrospective board', 'Screenshot your retro or planning board'],
 ];
 
 const MAX_IMAGE_B64_CHARS = 7_000_000; // ~5 MB decoded
-const MAX_PDF_BYTES = 10 * 1024 * 1024;
-const MAX_CSV_CHARS = 80_000;
 
-interface PickedFile {
+interface PickedImage {
   name: string;
-  size?: number;
-  type: 'image' | 'pdf' | 'csv';
-  base64?: string;
-  textContent?: string;
+  base64: string;
   mimeType: string;
-  previewUri?: string;
+  previewUri: string;
 }
 
 export default function AnalyzeScreen() {
-  const [file, setFile] = useState<PickedFile | null>(null);
+  const [image, setImage] = useState<PickedImage | null>(null);
   const [prompt, setPrompt] = useState('');
   const [result, setResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const reset = useCallback(() => {
-    setFile(null);
+    setImage(null);
     setPrompt('');
     setResult(null);
     setError(null);
@@ -87,9 +80,8 @@ export default function AnalyzeScreen() {
       Alert.alert('Image too large', 'Please use an image under 5 MB.');
       return;
     }
-    setFile({
-      name: asset.fileName ?? 'image.jpg',
-      type: 'image',
+    setImage({
+      name: asset.fileName ?? 'screenshot.jpg',
       base64: asset.base64,
       mimeType: asset.mimeType ?? 'image/jpeg',
       previewUri: asset.uri,
@@ -98,54 +90,8 @@ export default function AnalyzeScreen() {
     setError(null);
   }, []);
 
-  const pickDocument = useCallback(async () => {
-    const res = await DocumentPicker.getDocumentAsync({
-      type: [
-        'application/pdf',
-        'text/csv',
-        'text/plain',
-        'text/comma-separated-values',
-        'public.comma-separated-values-text',
-      ],
-      copyToCacheDirectory: true,
-    });
-    if (res.canceled || !res.assets?.[0]) return;
-    const asset = res.assets[0];
-    const name = asset.name.toLowerCase();
-    const mime = asset.mimeType ?? '';
-    const isPdf = mime === 'application/pdf' || name.endsWith('.pdf');
-    const isCsv = mime.includes('csv') || name.endsWith('.csv') || name.endsWith('.txt');
-
-    if (!isPdf && !isCsv) {
-      Alert.alert('Unsupported file', 'Please pick a PDF, CSV, or TXT file.');
-      return;
-    }
-
-    if (isPdf) {
-      if (asset.size && asset.size > MAX_PDF_BYTES) {
-        Alert.alert('PDF too large', 'Please use a PDF under 10 MB.');
-        return;
-      }
-      const base64 = await FileSystem.readAsStringAsync(asset.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      setFile({ name: asset.name, size: asset.size, type: 'pdf', base64, mimeType: 'application/pdf' });
-    } else {
-      let text = await FileSystem.readAsStringAsync(asset.uri, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
-      if (text.length > MAX_CSV_CHARS) {
-        text = text.slice(0, MAX_CSV_CHARS);
-        Alert.alert('File truncated', 'Only the first 80,000 characters will be analyzed.');
-      }
-      setFile({ name: asset.name, size: asset.size, type: 'csv', textContent: text, mimeType: mime });
-    }
-    setResult(null);
-    setError(null);
-  }, []);
-
   const analyze = useCallback(async () => {
-    if (!file) return;
+    if (!image) return;
     const finalPrompt = prompt.trim() || 'Analyze this and provide specific Agile coaching recommendations.';
 
     const apiKey = await getApiKey();
@@ -167,24 +113,6 @@ export default function AnalyzeScreen() {
     setLoading(true);
     setError(null);
 
-    const userContent: object[] = [];
-
-    if (file.type === 'image') {
-      userContent.push({
-        type: 'image',
-        source: { type: 'base64', media_type: file.mimeType, data: file.base64 },
-      });
-    } else if (file.type === 'pdf') {
-      userContent.push({
-        type: 'document',
-        source: { type: 'base64', media_type: 'application/pdf', data: file.base64 },
-      });
-    } else {
-      userContent.push({ type: 'text', text: `File: ${file.name}\n\n${file.textContent}` });
-    }
-
-    userContent.push({ type: 'text', text: finalPrompt });
-
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -192,13 +120,21 @@ export default function AnalyzeScreen() {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
-          'anthropic-beta': 'pdfs-2024-09-25',
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 2048,
           system: ANALYSIS_SYSTEM_PROMPT,
-          messages: [{ role: 'user', content: userContent }],
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: { type: 'base64', media_type: image.mimeType, data: image.base64 },
+              },
+              { type: 'text', text: finalPrompt },
+            ],
+          }],
         }),
       });
 
@@ -213,10 +149,10 @@ export default function AnalyzeScreen() {
 
       await saveConversation({
         id: Date.now().toString(),
-        title: `Analysis: ${file.name.slice(0, 50)}`,
+        title: `Analysis: ${image.name.slice(0, 50)}`,
         date: new Date().toISOString(),
         messages: [
-          { role: 'user', content: `[Uploaded: ${file.name}]\n\n${finalPrompt}` },
+          { role: 'user', content: `[Screenshot: ${image.name}]\n\n${finalPrompt}` },
           { role: 'assistant', content: text },
         ],
       });
@@ -229,7 +165,7 @@ export default function AnalyzeScreen() {
     } finally {
       setLoading(false);
     }
-  }, [file, prompt]);
+  }, [image, prompt]);
 
   const handleCopyResult = useCallback(async () => {
     if (!result) return;
@@ -246,7 +182,7 @@ export default function AnalyzeScreen() {
           <TouchableOpacity onPress={reset} activeOpacity={0.7}>
             <Text style={styles.backText}>‹ New Analysis</Text>
           </TouchableOpacity>
-          <Text style={styles.fileBadge} numberOfLines={1}>{file?.name}</Text>
+          <Text style={styles.fileBadge} numberOfLines={1}>{image?.name}</Text>
         </View>
         <ScrollView contentContainerStyle={styles.resultScroll} showsVerticalScrollIndicator={false}>
           <TouchableOpacity onLongPress={handleCopyResult} activeOpacity={0.92}>
@@ -267,7 +203,7 @@ export default function AnalyzeScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Analyze</Text>
-        <Text style={styles.headerSub}>Upload a file for Agile coaching</Text>
+        <Text style={styles.headerSub}>Screenshot your board for Agile coaching</Text>
       </View>
 
       <ScrollView
@@ -275,21 +211,14 @@ export default function AnalyzeScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Picker buttons */}
-        {!file && (
+        {/* Pick button */}
+        {!image && (
           <>
-            <View style={styles.pickRow}>
-              <TouchableOpacity style={styles.pickBtn} onPress={pickImage} activeOpacity={0.8}>
-                <Text style={styles.pickIcon}>🖼️</Text>
-                <Text style={styles.pickBtnTitle}>Screenshot</Text>
-                <Text style={styles.pickBtnSub}>Jira board, roadmap,{'\n'}kanban, slide</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.pickBtn} onPress={pickDocument} activeOpacity={0.8}>
-                <Text style={styles.pickIcon}>📄</Text>
-                <Text style={styles.pickBtnTitle}>Document</Text>
-                <Text style={styles.pickBtnSub}>PDF or CSV export{'\n'}from Jira / tools</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity style={styles.pickBtn} onPress={pickImage} activeOpacity={0.8}>
+              <Text style={styles.pickIcon}>🖼️</Text>
+              <Text style={styles.pickBtnTitle}>Choose Screenshot</Text>
+              <Text style={styles.pickBtnSub}>Pick from your photo library</Text>
+            </TouchableOpacity>
 
             <Text style={styles.sectionLabel}>WHAT TO UPLOAD</Text>
             {HOW_TO_TIPS.map(([icon, title, sub]) => (
@@ -304,21 +233,12 @@ export default function AnalyzeScreen() {
           </>
         )}
 
-        {/* File preview */}
-        {!!file && (
+        {/* Image preview */}
+        {!!image && (
           <View style={styles.previewCard}>
-            {file.type === 'image' && file.previewUri ? (
-              <Image source={{ uri: file.previewUri }} style={styles.previewImage} resizeMode="cover" />
-            ) : (
-              <View style={styles.previewDocIcon}>
-                <Text style={styles.previewDocEmoji}>{file.type === 'pdf' ? '📄' : '📊'}</Text>
-              </View>
-            )}
+            <Image source={{ uri: image.previewUri }} style={styles.previewImage} resizeMode="cover" />
             <View style={styles.previewInfo}>
-              <Text style={styles.previewName} numberOfLines={2}>{file.name}</Text>
-              {!!file.size && (
-                <Text style={styles.previewSize}>{(file.size / 1024).toFixed(0)} KB</Text>
-              )}
+              <Text style={styles.previewName} numberOfLines={2}>{image.name}</Text>
             </View>
             <TouchableOpacity onPress={reset} style={styles.removeBtn} activeOpacity={0.7}>
               <Text style={styles.removeBtnText}>✕</Text>
@@ -327,7 +247,7 @@ export default function AnalyzeScreen() {
         )}
 
         {/* Quick prompts + input */}
-        {!!file && (
+        {!!image && (
           <>
             <Text style={styles.sectionLabel}>QUICK ANALYSIS</Text>
             {QUICK_PROMPTS.map(p => (
@@ -432,27 +352,22 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 22, fontWeight: '700', color: Colors.text, letterSpacing: -0.3 },
   headerSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
   backText: { fontSize: 18, color: Colors.teal, fontWeight: '500' },
-  fileBadge: {
-    fontSize: 12,
-    color: Colors.grayDark,
-    marginTop: 4,
-  },
+  fileBadge: { fontSize: 12, color: Colors.grayDark, marginTop: 4 },
   scroll: { padding: 16 },
   resultScroll: { padding: 16 },
-  pickRow: { flexDirection: 'row', gap: 12, marginBottom: 28 },
   pickBtn: {
-    flex: 1,
     backgroundColor: Colors.surface,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: 18,
+    padding: 28,
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    marginBottom: 28,
   },
-  pickIcon: { fontSize: 32 },
-  pickBtnTitle: { fontSize: 15, fontWeight: '700', color: Colors.text },
-  pickBtnSub: { fontSize: 12, color: Colors.textSecondary, textAlign: 'center', lineHeight: 17 },
+  pickIcon: { fontSize: 40 },
+  pickBtnTitle: { fontSize: 17, fontWeight: '700', color: Colors.text },
+  pickBtnSub: { fontSize: 13, color: Colors.textSecondary },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',
@@ -485,19 +400,9 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 12,
   },
-  previewImage: { width: 64, height: 64, borderRadius: 8 },
-  previewDocIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 8,
-    backgroundColor: Colors.navyMid,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  previewDocEmoji: { fontSize: 28 },
+  previewImage: { width: 72, height: 72, borderRadius: 8 },
   previewInfo: { flex: 1 },
   previewName: { fontSize: 14, fontWeight: '600', color: Colors.text, lineHeight: 20 },
-  previewSize: { fontSize: 12, color: Colors.grayDark, marginTop: 2 },
   removeBtn: { padding: 8 },
   removeBtnText: { fontSize: 16, color: Colors.grayDark, fontWeight: '600' },
   chip: {
