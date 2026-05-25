@@ -95,6 +95,33 @@ export async function renameConversation(id: string, title: string): Promise<voi
   }
 }
 
+// ── Response style ────────────────────────────────────────────────────────────
+
+export type ResponseStyle = 'concise' | 'balanced' | 'detailed';
+const RESPONSE_STYLE_KEY = 'response_style';
+
+export async function getResponseStyle(): Promise<ResponseStyle> {
+  const raw = await AsyncStorage.getItem(RESPONSE_STYLE_KEY);
+  return (raw as ResponseStyle | null) ?? 'balanced';
+}
+
+export async function setResponseStyle(style: ResponseStyle): Promise<void> {
+  await AsyncStorage.setItem(RESPONSE_STYLE_KEY, style);
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+const NOTIFICATIONS_KEY = 'notifications_enabled';
+
+export async function getNotificationsEnabled(): Promise<boolean> {
+  const raw = await AsyncStorage.getItem(NOTIFICATIONS_KEY);
+  return raw === '1';
+}
+
+export async function setNotificationsEnabled(value: boolean): Promise<void> {
+  await AsyncStorage.setItem(NOTIFICATIONS_KEY, value ? '1' : '0');
+}
+
 const PRO_KEY = 'is_pro';
 
 export async function getIsPro(): Promise<boolean> {

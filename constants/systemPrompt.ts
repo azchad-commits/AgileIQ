@@ -31,7 +31,13 @@ interface ProfileShape {
   framework?: string;
 }
 
-export function buildSystemPrompt(profile?: ProfileShape | null, userContext?: string): string {
+export type ResponseStyle = 'concise' | 'balanced' | 'detailed';
+
+export function buildSystemPrompt(
+  profile?: ProfileShape | null,
+  userContext?: string,
+  responseStyle?: ResponseStyle,
+): string {
   let text = SYSTEM_PROMPT;
 
   if (profile) {
@@ -46,6 +52,12 @@ export function buildSystemPrompt(profile?: ProfileShape | null, userContext?: s
 
   if (userContext?.trim()) {
     text += `\n\nAdditional context: ${userContext.trim()}`;
+  }
+
+  if (responseStyle === 'concise') {
+    text += '\n\nResponse style: Be extremely concise. Lead with the direct answer in 1–2 sentences. Use bullets only when listing 3+ items. Skip all preamble and summary — get straight to the point.';
+  } else if (responseStyle === 'detailed') {
+    text += '\n\nResponse style: Be comprehensive. Cover the topic thoroughly with examples, context, and nuance. Include practical steps, edge cases, and deeper rationale. The user wants depth — do not truncate.';
   }
 
   return text;

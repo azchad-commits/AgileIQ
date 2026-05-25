@@ -8,6 +8,9 @@ import {
   StyleSheet,
   Platform,
   Share,
+  Modal,
+  ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -16,12 +19,16 @@ import * as Clipboard from 'expo-clipboard';
 import Markdown from 'react-native-markdown-display';
 import { Colors } from '../../constants/colors';
 import { getConversations, renameConversation, type Conversation } from '../../services/storage';
+import { getApiKey, getAppApiKey } from '../../services/secureStorage';
 
 export default function ConversationDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
+  const [summaryVisible, setSummaryVisible] = useState(false);
+  const [summaryText, setSummaryText] = useState('');
+  const [summarizing, setSummarizing] = useState(false);
   const listRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -57,6 +64,42 @@ export default function ConversationDetailScreen() {
       setConversation(prev => prev ? { ...prev, title: trimmed } : prev);
     }
     setEditingTitle(false);
+  };
+
+  const handleSummarize = async () => {
+    const byokKey = await getApiKey();
+    const apiKey = byokKey ?? getAppApiKey();
+    if (!apiKey) return;
+    setSummarizing(true);
+    setSummaryText('');
+    setSummaryVisible(true);
+    try {
+      const transcript = conversation!.messages
+        .map(m => `${m.role === 'user' ? 'User' : 'AgileIQ'}: ${m.content}`)
+        .join('\n\n');
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 512,
+          messages: [{
+            role: 'user',
+            content: `Summarize the key coaching insights and action items from this AgileIQ conversation in 4–5 concise bullet points. Focus on what was learned and what to do next.\n\n${transcript}`,
+          }],
+        }),
+      });
+      const data = await res.json();
+      setSummaryText(data.content?.[0]?.text ?? 'Could not generate summary.');
+    } catch {
+      setSummaryText('Something went wrong. Please try again.');
+    } finally {
+      setSummarizing(false);
+    }
   };
 
   const handleShare = async () => {
@@ -115,14 +158,58 @@ export default function ConversationDetailScreen() {
       />
 
       <SafeAreaView edges={['bottom']} style={styles.footer}>
-        <TouchableOpacity
-          style={styles.continueBtn}
-          onPress={() => router.navigate({ pathname: '/', params: { continueId: conversation.id } })}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.continueBtnText}>Continue Conversation</Text>
-        </TouchableOpacity>
+        <View style={styles.footerRow}>
+          <TouchableOpacity
+            style={styles.summarizeBtn}
+            onPress={handleSummarize}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.summarizeBtnText}>Summarize</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.continueBtn}
+            onPress={() => router.navigate({ pathname: '/', params: { continueId: conversation.id } })}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.continueBtnText}>Continue</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
+
+      {/* Summary modal */}
+      <Modal visible={summaryVisible} animationType="slide" transparent presentationStyle="overFullScreen">
+        <View style={styles.summaryOverlay}>
+          <TouchableOpacity style={styles.summaryBackdrop} onPress={() => setSummaryVisible(false)} activeOpacity={1} />
+          <View style={styles.summarySheet}>
+            <View style={styles.summaryHandle} />
+            <View style={styles.summaryHeader}>
+              <Text style={styles.summaryTitle}>Key Takeaways</Text>
+              <TouchableOpacity onPress={() => setSummaryVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={styles.summaryClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.summaryBody} showsVerticalScrollIndicator={false}>
+              {summarizing ? (
+                <View style={styles.summaryLoading}>
+                  <ActivityIndicator color={Colors.teal} />
+                  <Text style={styles.summaryLoadingText}>Summarizing…</Text>
+                </View>
+              ) : (
+                <Markdown style={markdownStyles}>{summaryText}</Markdown>
+              )}
+            </ScrollView>
+            {!summarizing && !!summaryText && (
+              <TouchableOpacity
+                style={styles.summaryShareBtn}
+                onPress={() => Share.share({ message: `${conversation.title}\n\nKey Takeaways:\n${summaryText}` })}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.summaryShareText}>Share Summary</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -238,7 +325,26 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
     backgroundColor: Colors.background,
   },
+  footerRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  summarizeBtn: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.teal,
+    backgroundColor: 'transparent',
+  },
+  summarizeBtnText: {
+    color: Colors.teal,
+    fontWeight: '700',
+    fontSize: 16,
+  },
   continueBtn: {
+    flex: 2,
     backgroundColor: Colors.teal,
     borderRadius: 12,
     padding: 14,
@@ -249,4 +355,34 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
   },
+  summaryOverlay: { flex: 1, justifyContent: 'flex-end' },
+  summaryBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)' },
+  summarySheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+    paddingBottom: 32,
+  },
+  summaryHandle: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: Colors.border,
+    alignSelf: 'center', marginTop: 10, marginBottom: 6,
+  },
+  summaryHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  summaryTitle: { fontSize: 17, fontWeight: '700', color: Colors.text },
+  summaryClose: { fontSize: 18, color: Colors.grayDark },
+  summaryBody: { paddingHorizontal: 20, paddingTop: 16 },
+  summaryLoading: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 20 },
+  summaryLoadingText: { color: Colors.textSecondary, fontSize: 15 },
+  summaryShareBtn: {
+    marginHorizontal: 20, marginTop: 16,
+    borderRadius: 12, padding: 14,
+    backgroundColor: Colors.teal, alignItems: 'center',
+  },
+  summaryShareText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
 });

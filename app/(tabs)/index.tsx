@@ -33,9 +33,11 @@ import {
   getRemainingQuestions,
   getIsPro,
   checkAndIncrementDailyCount,
+  getResponseStyle,
   FREE_TIER_LIMIT,
   PRO_TIER_LIMIT,
   type Favorite,
+  type ResponseStyle,
 } from '../../services/storage';
 import { friendlyApiError, isNetworkError } from '../../services/apiErrors';
 
@@ -120,14 +122,16 @@ export default function ChatScreen() {
   const inputRef = useRef('');
   const byokKeyRef = useRef<string | null>(null);
   const isProRef = useRef(false);
+  const responseStyleRef = useRef<ResponseStyle>('balanced');
   messagesRef.current = messages;
   loadingRef.current = loading;
   inputRef.current = input;
 
   const refreshTierStatus = useCallback(async () => {
-    const [byokKey, pro] = await Promise.all([getApiKey(), getIsPro()]);
+    const [byokKey, pro, style] = await Promise.all([getApiKey(), getIsPro(), getResponseStyle()]);
     byokKeyRef.current = byokKey;
     isProRef.current = pro;
+    responseStyleRef.current = style;
     const byok = !!byokKey;
     setIsByok(byok);
     setIsPro(pro);
@@ -232,7 +236,7 @@ export default function ChatScreen() {
     }
 
     const [userCtx, profile] = await Promise.all([getUserContext(), getUserProfile()]);
-    const systemPromptText = buildSystemPrompt(profile, userCtx);
+    const systemPromptText = buildSystemPrompt(profile, userCtx, responseStyleRef.current);
 
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 

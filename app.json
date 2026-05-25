@@ -39,6 +39,13 @@
           "cameraPermission": "AgileIQ needs camera access to photograph your Agile boards for analysis."
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#1D9E75"
+        }
+      ],
     ],
     "extra": {
       "router": {},

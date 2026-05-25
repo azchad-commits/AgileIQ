@@ -9,13 +9,15 @@ import {
   StyleSheet,
   Platform,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import Constants from 'expo-constants';
 import { Colors } from '../../constants/colors';
 import { getApiKey, setApiKey, deleteApiKey } from '../../services/secureStorage';
-import { getUserContext, setUserContext as saveUserContext, getIsPro, FREE_TIER_LIMIT, PRO_TIER_LIMIT, getUserProfile, setUserProfile, type UserProfile } from '../../services/storage';
+import { getUserContext, setUserContext as saveUserContext, getIsPro, FREE_TIER_LIMIT, PRO_TIER_LIMIT, getUserProfile, setUserProfile, getResponseStyle, setResponseStyle, getNotificationsEnabled, setNotificationsEnabled, type UserProfile, type ResponseStyle } from '../../services/storage';
+import { requestNotificationPermissions, scheduleDailyTip, cancelDailyTip } from '../../services/notifications';
 import { syncProStatus, presentProPaywall, restorePurchases } from '../../services/revenueCat';
 import { OnboardingModal } from '../../components/OnboardingModal';
 
@@ -31,6 +33,8 @@ export default function SettingsScreen() {
   const [upgrading, setUpgrading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [profile, setProfile] = useState<UserProfile>({ role: '', maturity: '', framework: '' });
+  const [responseStyle, setResponseStyleState] = useState<ResponseStyle>('balanced');
+  const [notificationsEnabled, setNotificationsEnabledState] = useState(false);
 
   const load = useCallback(async () => {
     const [key, pro] = await Promise.all([getApiKey(), syncProStatus()]);
@@ -38,9 +42,13 @@ export default function SettingsScreen() {
     if (key) setApiKeyState(key);
     setTestResult(null);
     setIsProState(pro);
-    const [ctx, prof] = await Promise.all([getUserContext(), getUserProfile()]);
+    const [ctx, prof, style, notifs] = await Promise.all([
+      getUserContext(), getUserProfile(), getResponseStyle(), getNotificationsEnabled(),
+    ]);
     setUserContext(ctx);
     if (prof) setProfile(prof);
+    setResponseStyleState(style);
+    setNotificationsEnabledState(notifs);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -127,6 +135,21 @@ export default function SettingsScreen() {
         },
       },
     ]);
+  };
+
+  const handleNotificationToggle = async (value: boolean) => {
+    if (value) {
+      const granted = await requestNotificationPermissions();
+      if (!granted) {
+        Alert.alert('Permission needed', 'Please allow notifications in iOS Settings to receive daily tips.');
+        return;
+      }
+      await scheduleDailyTip();
+    } else {
+      await cancelDailyTip();
+    }
+    await setNotificationsEnabled(value);
+    setNotificationsEnabledState(value);
   };
 
   function maskedKey(key: string): string {
@@ -327,6 +350,54 @@ export default function SettingsScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Response Style */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>RESPONSE STYLE</Text>
+          <Text style={styles.sectionHint}>
+            Control how detailed AgileIQ's answers are.
+          </Text>
+          <View style={styles.card}>
+            <View style={styles.profileSection}>
+              <View style={styles.profileChips}>
+                {(['concise', 'balanced', 'detailed'] as ResponseStyle[]).map(s => (
+                  <TouchableOpacity
+                    key={s}
+                    style={[styles.profileChip, styles.styleChip, responseStyle === s && styles.profileChipActive]}
+                    onPress={() => { setResponseStyleState(s); setResponseStyle(s); }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.profileChipText, responseStyle === s && styles.profileChipTextActive]}>
+                      {s.charAt(0).toUpperCase() + s.slice(1)}
+                    </Text>
+                    <Text style={[styles.styleChipSub, responseStyle === s && styles.styleChipSubActive]}>
+                      {s === 'concise' ? '1–2 sentence answers' : s === 'balanced' ? 'Default depth' : 'Full depth + examples'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Daily Tips */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>DAILY AGILE TIP</Text>
+          <View style={styles.card}>
+            <View style={styles.notifRow}>
+              <View style={styles.notifText}>
+                <Text style={styles.notifLabel}>Morning tip at 8:30 AM</Text>
+                <Text style={styles.notifSub}>A rotating Agile coaching tip each day</Text>
+              </View>
+              <Switch
+                value={notificationsEnabled}
+                onValueChange={handleNotificationToggle}
+                trackColor={{ false: Colors.navyMid, true: Colors.teal }}
+                thumbColor={Colors.white}
+              />
             </View>
           </View>
         </View>
@@ -583,4 +654,27 @@ const styles = StyleSheet.create({
     color: Colors.tealLight,
     fontWeight: '600',
   },
+  styleChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  styleChipSub: {
+    fontSize: 11,
+    color: Colors.grayDark,
+    marginTop: 3,
+    textAlign: 'center',
+  },
+  styleChipSubActive: {
+    color: Colors.teal,
+  },
+  notifRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  notifText: { flex: 1, marginRight: 12 },
+  notifLabel: { fontSize: 15, color: Colors.text, fontWeight: '500' },
+  notifSub: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
 });

@@ -8,6 +8,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
+import { setUserProfile } from '../services/storage';
+
+const ROLES = ['Scrum Master', 'Agile Coach', 'Product Owner', 'Developer', 'Manager', 'Other'];
+const FRAMEWORKS = ['Scrum', 'SAFe', 'Kanban', 'LeSS', 'Spotify', 'Other'];
 
 const PAGES = [
   {
@@ -16,22 +20,30 @@ const PAGES = [
     body: 'Your personal AI Agile coach — instant answers about Scrum, SAFe, sprint planning, retrospectives, and team dynamics.',
   },
   {
-    icon: '💬',
-    title: 'Ask anything',
-    body: 'Type a question, browse Topics for guided prompts, or upload a screenshot of your Jira board for a full AI analysis.',
+    icon: '🛠️',
+    title: 'Everything you need',
+    body: 'Chat with your AI coach, use Guided Sessions for sprints and retros, analyze your Jira board screenshots, and explore curated topics.',
   },
   {
-    icon: '🔑',
-    title: 'Add your API key',
-    body: 'AgileIQ uses the Anthropic Claude API. Get a free key at console.anthropic.com, then add it in Settings for unlimited use.',
+    icon: '🧑‍💼',
+    title: 'Personalize your coaching',
+    body: 'Tell AgileIQ about yourself so every response is tailored to your role.',
+    isProfile: true,
   },
 ];
 
 export function OnboardingModal({ visible, onDismiss }: { visible: boolean; onDismiss: () => void }) {
   const [page, setPage] = useState(0);
+  const [role, setRole] = useState('');
+  const [framework, setFramework] = useState('');
 
-  const handleDismiss = () => {
+  const handleDismiss = async () => {
+    if (role || framework) {
+      await setUserProfile({ role, maturity: '', framework }).catch(() => {});
+    }
     setPage(0);
+    setRole('');
+    setFramework('');
     onDismiss();
   };
 
@@ -44,14 +56,47 @@ export function OnboardingModal({ visible, onDismiss }: { visible: boolean; onDi
   };
 
   const isLast = page === PAGES.length - 1;
+  const currentPage = PAGES[page];
 
   return (
     <Modal visible={visible} animationType="fade" transparent={false} statusBarTranslucent>
       <SafeAreaView style={ob.container}>
         <View style={ob.content}>
-          <Text style={ob.icon}>{PAGES[page].icon}</Text>
-          <Text style={ob.title}>{PAGES[page].title}</Text>
-          <Text style={ob.body}>{PAGES[page].body}</Text>
+          <Text style={ob.icon}>{currentPage.icon}</Text>
+          <Text style={ob.title}>{currentPage.title}</Text>
+          {currentPage.isProfile ? (
+            <View style={ob.profileWrap}>
+              <Text style={ob.profileSectionLabel}>YOUR ROLE</Text>
+              <View style={ob.chips}>
+                {ROLES.map(r => (
+                  <TouchableOpacity
+                    key={r}
+                    style={[ob.chip, role === r && ob.chipActive]}
+                    onPress={() => setRole(prev => prev === r ? '' : r)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[ob.chipText, role === r && ob.chipTextActive]}>{r}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={[ob.profileSectionLabel, { marginTop: 20 }]}>PRIMARY FRAMEWORK</Text>
+              <View style={ob.chips}>
+                {FRAMEWORKS.map(fw => (
+                  <TouchableOpacity
+                    key={fw}
+                    style={[ob.chip, framework === fw && ob.chipActive]}
+                    onPress={() => setFramework(prev => prev === fw ? '' : fw)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[ob.chipText, framework === fw && ob.chipTextActive]}>{fw}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={ob.profileHint}>You can update this anytime in Settings.</Text>
+            </View>
+          ) : (
+            <Text style={ob.body}>{currentPage.body}</Text>
+          )}
         </View>
 
         <View style={ob.footer}>
@@ -84,12 +129,12 @@ const ob = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 36,
-    paddingBottom: 40,
+    paddingHorizontal: 28,
+    paddingBottom: 24,
   },
-  icon: { fontSize: 72, marginBottom: 32 },
+  icon: { fontSize: 72, marginBottom: 28 },
   title: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '700',
     color: Colors.text,
     textAlign: 'center',
@@ -101,6 +146,47 @@ const ob = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 26,
+  },
+  profileWrap: {
+    alignSelf: 'stretch',
+  },
+  profileSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.grayDark,
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  chipActive: {
+    backgroundColor: Colors.tealDim,
+    borderColor: Colors.teal,
+  },
+  chipText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  chipTextActive: {
+    color: Colors.tealLight,
+    fontWeight: '600',
+  },
+  profileHint: {
+    fontSize: 12,
+    color: Colors.grayDark,
+    marginTop: 16,
+    textAlign: 'center',
   },
   footer: {
     paddingHorizontal: 28,
