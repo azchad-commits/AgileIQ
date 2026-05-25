@@ -7,12 +7,29 @@ import {
   TextInput,
   Modal,
   StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Colors } from '../../constants/colors';
+
+// ── Module-level constants ────────────────────────────────────────────────────
+
+const SPRINT_CONCERNS = [
+  'Too many carry-overs',
+  'Scope creep',
+  'Team availability',
+  'Unclear requirements',
+  'Technical debt',
+  'Dependencies',
+];
+
+const RETRO_FORMATS = ['Start/Stop/Continue', '4Ls', 'Mad/Sad/Glad', 'Rose/Thorn/Bud', 'ORID'];
+const RETRO_TIMES = ['30 min', '45 min', '60 min', '90 min'];
+const STORY_COUNTS = ['3', '5', '8', '10'];
 
 // ── Shared bottom sheet ───────────────────────────────────────────────────────
 
@@ -32,7 +49,10 @@ function Sheet({
     <Modal visible={visible} animationType="slide" transparent presentationStyle="overFullScreen">
       <View style={sh.overlay}>
         <TouchableOpacity style={sh.backdrop} onPress={onClose} activeOpacity={1} />
-        <View style={[sh.container, { height: screenHeight * 0.88 }]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={[sh.container, { height: screenHeight * 0.88 }]}
+        >
           <View style={sh.handle} />
           <View style={sh.header}>
             <Text style={sh.title}>{title}</Text>
@@ -51,7 +71,7 @@ function Sheet({
           >
             {children}
           </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -261,15 +281,6 @@ function SprintPlannerSheet({ visible, onClose }: { visible: boolean; onClose: (
   const [velocity, setVelocity] = useState('');
   const [concerns, setConcerns] = useState<string[]>([]);
 
-  const CONCERNS = [
-    'Too many carry-overs',
-    'Scope creep',
-    'Team availability',
-    'Unclear requirements',
-    'Technical debt',
-    'Dependencies',
-  ];
-
   const toggleConcern = (v: string) =>
     setConcerns(prev => prev.includes(v) ? prev.filter(c => c !== v) : [...prev, v]);
 
@@ -322,7 +333,7 @@ function SprintPlannerSheet({ visible, onClose }: { visible: boolean; onClose: (
       />
       <ChipGroup
         label="TOP CONCERNS (pick any)"
-        options={CONCERNS}
+        options={SPRINT_CONCERNS}
         selected={concerns}
         onSelect={toggleConcern}
         multi
@@ -347,9 +358,6 @@ function RetroSheet({ visible, onClose }: { visible: boolean; onClose: () => voi
   const [teamSize, setTeamSize] = useState(6);
   const [timeBox, setTimeBox] = useState('60 min');
 
-  const FORMATS = ['Start/Stop/Continue', '4Ls', 'Mad/Sad/Glad', 'Rose/Thorn/Bud', 'ORID'];
-  const TIMES = ['30 min', '45 min', '60 min', '90 min'];
-
   const handleGenerate = () => {
     if (!format) return;
     const prompt = `Facilitate a **${format}** retrospective for our team of ${teamSize} people with ${timeBox} available.\n\nPlease:\n1. Briefly explain the ${format} format (2–3 sentences)\n2. Give 4–5 strong questions for each category that spark honest reflection\n3. Suggest a time allocation breakdown for ${timeBox}\n4. Give 2–3 tips for drawing out quieter team members\n5. Explain how to close the retro: turning insights into 1–2 committed action items`;
@@ -370,12 +378,12 @@ function RetroSheet({ visible, onClose }: { visible: boolean; onClose: () => voi
     <Sheet visible={visible} onClose={() => { reset(); onClose(); }} title="🔄 Retro Facilitator">
       <ChipGroup
         label="RETROSPECTIVE FORMAT *"
-        options={FORMATS}
+        options={RETRO_FORMATS}
         selected={format}
         onSelect={setFormat}
       />
       <Stepper label="Team size" value={teamSize} min={2} max={30} onChange={setTeamSize} />
-      <ChipGroup label="TIME AVAILABLE" options={TIMES} selected={timeBox} onSelect={setTimeBox} />
+      <ChipGroup label="TIME AVAILABLE" options={RETRO_TIMES} selected={timeBox} onSelect={setTimeBox} />
       <TouchableOpacity
         style={[f.submitBtn, !format && f.submitBtnDisabled]}
         onPress={handleGenerate}
@@ -395,8 +403,6 @@ function UserStorySheet({ visible, onClose }: { visible: boolean; onClose: () =>
   const [epic, setEpic] = useState('');
   const [persona, setPersona] = useState('');
   const [count, setCount] = useState('5');
-
-  const COUNTS = ['3', '5', '8', '10'];
 
   const handleGenerate = () => {
     if (!epic.trim()) return;
@@ -440,7 +446,7 @@ function UserStorySheet({ visible, onClose }: { visible: boolean; onClose: () =>
         placeholderTextColor={Colors.grayDark}
         maxLength={80}
       />
-      <ChipGroup label="NUMBER OF STORIES" options={COUNTS} selected={count} onSelect={setCount} />
+      <ChipGroup label="NUMBER OF STORIES" options={STORY_COUNTS} selected={count} onSelect={setCount} />
       <TouchableOpacity
         style={[f.submitBtn, !epic.trim() && f.submitBtnDisabled]}
         onPress={handleGenerate}

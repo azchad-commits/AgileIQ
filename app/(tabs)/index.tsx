@@ -20,7 +20,8 @@ import * as Clipboard from 'expo-clipboard';
 import Markdown from 'react-native-markdown-display';
 import { Colors } from '../../constants/colors';
 import { buildSystemPrompt } from '../../constants/systemPrompt';
-import { getApiKey } from '../../services/secureStorage';
+import { getApiKey, getAppApiKey } from '../../services/secureStorage';
+import { syncProStatus, presentProPaywall } from '../../services/revenueCat';
 import {
   saveConversation,
   getConversations,
@@ -35,7 +36,6 @@ import {
   PRO_TIER_LIMIT,
   type Favorite,
 } from '../../services/storage';
-import { presentProPaywall } from '../../services/revenueCat';
 import { friendlyApiError, isNetworkError } from '../../services/apiErrors';
 
 interface Message {
@@ -121,15 +121,12 @@ export default function ChatScreen() {
   loadingRef.current = loading;
   inputRef.current = input;
 
-  // Load Pro/BYOK status and remaining count on mount
-  useEffect(() => {
-    (async () => {
-      const [apiKey, pro] = await Promise.all([getApiKey(), getIsPro()]);
-      const byok = !!apiKey;
-      setIsByok(byok);
-      setIsPro(pro);
-      if (!byok) setRemaining(await getRemainingQuestions(pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT));
-    })();
+  const refreshTierStatus = useCallback(async () => {
+    const [byokKey, pro] = await Promise.all([getApiKey(), syncProStatus()]);
+    const byok = !!byokKey;
+    setIsByok(byok);
+    setIsPro(pro);
+    if (!byok) setRemaining(await getRemainingQuestions(pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT));
   }, []);
 
   const { prompt, t, continueId, newChat } = useLocalSearchParams<{ prompt?: string; t?: string; continueId?: string; newChat?: string }>();
@@ -170,13 +167,14 @@ export default function ChatScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prompt, t, newChat]);
 
-  // Draft persistence — save on blur, restore on focus (only for empty chats)
+  // Refresh tier status + restore draft on focus
   useFocusEffect(useCallback(() => {
+    refreshTierStatus();
     AsyncStorage.getItem('chat_draft').then(draft => {
       if (draft && messagesRef.current.length === 0) setInput(draft);
     });
     return () => { AsyncStorage.setItem('chat_draft', inputRef.current); };
-  }, []));
+  }, [refreshTierStatus]));
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -189,10 +187,33 @@ export default function ChatScreen() {
     retryContentRef.current = null;
     setIsOffline(false);
 
-    const apiKey = await getApiKey();
+    const byokKey = await getApiKey();
+    const appKey = getAppApiKey();
+    const apiKey = byokKey ?? appKey;
+
     if (!apiKey) {
-      setError('Add your Anthropic API key in Settings to get started.');
+      setError('No API key available. Add your Anthropic API key in Settings.');
       return;
+    }
+
+    // Non-BYOK: enforce daily limit and paywall
+    if (!byokKey) {
+      const pro = await getIsPro();
+      const limit = pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
+      const allowed = await checkAndIncrementDailyCount(limit);
+      if (!allowed) {
+        if (!pro) {
+          const upgraded = await presentProPaywall();
+          if (upgraded) {
+            setIsPro(true);
+            setRemaining(PRO_TIER_LIMIT - 1);
+          }
+        } else {
+          setError(`You've reached your ${PRO_TIER_LIMIT} question limit for today. Come back tomorrow!`);
+        }
+        return;
+      }
+      setRemaining(r => Math.max(0, r - 1));
     }
 
     const [userCtx, profile] = await Promise.all([getUserContext(), getUserProfile()]);
@@ -330,10 +351,12 @@ export default function ChatScreen() {
   }, [showToast]);
 
   const startNewChat = useCallback(() => {
+    abortControllerRef.current?.abort();
     setMessages([]);
     setError(null);
     setInput('');
     setIsOffline(false);
+    setShowScrollBtn(false);
     AsyncStorage.setItem('chat_draft', '');
     conversationId.current = Date.now().toString();
     conversationTitleRef.current = '';

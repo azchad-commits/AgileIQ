@@ -15,7 +15,8 @@ import { useFocusEffect } from 'expo-router';
 import Constants from 'expo-constants';
 import { Colors } from '../../constants/colors';
 import { getApiKey, setApiKey, deleteApiKey } from '../../services/secureStorage';
-import { getUserContext, setUserContext as saveUserContext } from '../../services/storage';
+import { getUserContext, setUserContext as saveUserContext, getIsPro, FREE_TIER_LIMIT, PRO_TIER_LIMIT } from '../../services/storage';
+import { syncProStatus, presentProPaywall, restorePurchases } from '../../services/revenueCat';
 import { OnboardingModal } from '../../components/OnboardingModal';
 
 export default function SettingsScreen() {
@@ -26,17 +27,46 @@ export default function SettingsScreen() {
   const [testResult, setTestResult] = useState<'valid' | string | null>(null);
   const [showIntro, setShowIntro] = useState(false);
   const [userContext, setUserContext] = useState('');
+  const [isPro, setIsProState] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   const load = useCallback(async () => {
-    const key = await getApiKey();
+    const [key, pro] = await Promise.all([getApiKey(), syncProStatus()]);
     setSavedKey(key);
     if (key) setApiKeyState(key);
     setTestResult(null);
+    setIsProState(pro);
     const ctx = await getUserContext();
     setUserContext(ctx);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const handleUpgrade = async () => {
+    setUpgrading(true);
+    try {
+      const purchased = await presentProPaywall();
+      if (purchased) setIsProState(true);
+    } catch (e: any) {
+      Alert.alert('Purchase failed', e.message ?? 'Something went wrong.');
+    } finally {
+      setUpgrading(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    setRestoring(true);
+    try {
+      const restored = await restorePurchases();
+      setIsProState(restored);
+      Alert.alert(restored ? 'Pro Restored' : 'Nothing to Restore', restored ? 'Your Pro subscription is active.' : 'No previous purchase found for this Apple ID.');
+    } catch (e: any) {
+      Alert.alert('Restore failed', e.message ?? 'Something went wrong.');
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   const handleTestKey = async () => {
     if (!savedKey) return;
@@ -110,12 +140,62 @@ export default function SettingsScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* API Key */}
+        {/* Plan */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>ANTHROPIC API KEY</Text>
+          <Text style={styles.sectionLabel}>YOUR PLAN</Text>
+          <View style={styles.card}>
+            {savedKey ? (
+              <View style={styles.planRow}>
+                <View>
+                  <Text style={styles.planTitle}>BYOK — Unlimited ✦</Text>
+                  <Text style={styles.planSub}>Using your own Anthropic API key</Text>
+                </View>
+              </View>
+            ) : isPro ? (
+              <>
+                <View style={styles.planRow}>
+                  <View>
+                    <Text style={styles.planTitle}>AgileIQ Pro ✦</Text>
+                    <Text style={styles.planSub}>{PRO_TIER_LIMIT} questions/day · $9.99/month</Text>
+                  </View>
+                </View>
+                <View style={styles.divider} />
+                <TouchableOpacity style={styles.planAction} onPress={handleRestore} disabled={restoring} activeOpacity={0.7}>
+                  {restoring
+                    ? <ActivityIndicator size="small" color={Colors.teal} />
+                    : <Text style={styles.planActionText}>Restore Purchases</Text>}
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <View style={styles.planRow}>
+                  <View>
+                    <Text style={styles.planTitle}>Free Plan</Text>
+                    <Text style={styles.planSub}>{FREE_TIER_LIMIT} questions/day</Text>
+                  </View>
+                </View>
+                <View style={styles.divider} />
+                <TouchableOpacity style={styles.upgradeBtn} onPress={handleUpgrade} disabled={upgrading} activeOpacity={0.85}>
+                  {upgrading
+                    ? <ActivityIndicator size="small" color={Colors.white} />
+                    : <Text style={styles.upgradeBtnText}>Upgrade to Pro — $9.99/month</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.planAction} onPress={handleRestore} disabled={restoring} activeOpacity={0.7}>
+                  {restoring
+                    ? <ActivityIndicator size="small" color={Colors.teal} />
+                    : <Text style={styles.planActionText}>Restore Purchases</Text>}
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+
+        {/* BYOK — optional */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>BRING YOUR OWN API KEY (OPTIONAL)</Text>
           <Text style={styles.sectionHint}>
-            Your key is stored securely on-device and never sent to our servers.
-            Get one at console.anthropic.com
+            Enter your own Anthropic API key for unlimited questions with no subscription.
+            Your key is stored securely on-device only.
           </Text>
           <View style={styles.card}>
             {savedKey ? (
@@ -156,7 +236,6 @@ export default function SettingsScreen() {
                   placeholderTextColor={Colors.grayDark}
                   autoCapitalize="none"
                   autoCorrect={false}
-                  autoFocus
                   secureTextEntry
                 />
                 <TouchableOpacity
@@ -276,6 +355,25 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: Colors.border,
   },
+  planRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+  },
+  planTitle: { fontSize: 16, fontWeight: '700', color: Colors.teal, marginBottom: 2 },
+  planSub: { fontSize: 13, color: Colors.textSecondary },
+  upgradeBtn: {
+    margin: 12,
+    marginTop: 0,
+    backgroundColor: Colors.teal,
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+  },
+  upgradeBtnText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
+  planAction: { paddingVertical: 14, alignItems: 'center' },
+  planActionText: { fontSize: 14, color: Colors.teal, fontWeight: '500' },
   keyRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
