@@ -450,17 +450,11 @@ export default function ChatScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Image
-            source={require('../../assets/icon.png')}
-            style={styles.headerLogo}
-            resizeMode="cover"
-          />
-          <View>
-            <Text style={styles.headerTitle}>AgileIQ</Text>
-            <Text style={styles.headerSub}>AI Agile Coach</Text>
-          </View>
-        </View>
+        <Image
+          source={require('../../assets/logo.png')}
+          style={styles.headerLogo}
+          resizeMode="contain"
+        />
         <View style={styles.headerRight}>
           <View style={styles.headerBadgeRow}>
             {(isByok || isPro) ? (
@@ -718,9 +712,9 @@ function EmptyState({ onSuggestion, profile }: { onSuggestion: (text: string) =>
   return (
     <View style={styles.empty}>
       <Image
-        source={require('../../assets/icon.png')}
+        source={require('../../assets/logo.png')}
         style={styles.emptyLogo}
-        resizeMode="cover"
+        resizeMode="contain"
       />
       <Text style={styles.emptyTitle}>{greeting}</Text>
       <Text style={styles.emptySub}>
@@ -810,7 +804,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerLogo: { width: 38, height: 38, borderRadius: 9 },
+  headerLogo: { width: 148, height: 44, borderRadius: 8 },
   headerTitle: { fontSize: 22, fontWeight: '700', color: Colors.teal, letterSpacing: -0.3 },
   headerSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 1 },
   headerRight: { alignItems: 'flex-end', gap: 8 },
@@ -959,7 +953,7 @@ const styles = StyleSheet.create({
   },
   scrollBtnIcon: { fontSize: 18, color: Colors.teal, fontWeight: '700', marginTop: -1 },
   empty: { flex: 1, paddingHorizontal: 24, paddingTop: 32, alignItems: 'center' },
-  emptyLogo: { width: 76, height: 76, borderRadius: 18, marginBottom: 20 },
+  emptyLogo: { width: 240, height: 130, borderRadius: 16, marginBottom: 16 },
   emptyTitle: { fontSize: 26, fontWeight: '700', color: Colors.text, textAlign: 'center', marginBottom: 12 },
   emptySub: {
     fontSize: 16,

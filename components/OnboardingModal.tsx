@@ -65,9 +65,9 @@ export function OnboardingModal({ visible, onDismiss }: { visible: boolean; onDi
         <View style={ob.content}>
           {page === 0 ? (
             <Image
-              source={require('../assets/icon.png')}
+              source={require('../assets/logo.png')}
               style={ob.logoImg}
-              resizeMode="cover"
+              resizeMode="contain"
             />
           ) : (
             <Text style={ob.icon}>{currentPage.icon}</Text>
@@ -142,7 +142,7 @@ const ob = StyleSheet.create({
     paddingBottom: 24,
   },
   icon: { fontSize: 72, marginBottom: 28 },
-  logoImg: { width: 96, height: 96, borderRadius: 22, marginBottom: 28 },
+  logoImg: { width: 280, height: 152, borderRadius: 20, marginBottom: 28 },
   title: {
     fontSize: 26,
     fontWeight: '700',
