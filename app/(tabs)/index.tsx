@@ -19,8 +19,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import Markdown from 'react-native-markdown-display';
+import * as Speech from 'expo-speech';
 import { Colors } from '../../constants/colors';
-import { buildSystemPrompt } from '../../constants/systemPrompt';
+import { SYSTEM_PROMPT, buildDynamicPrompt } from '../../constants/systemPrompt';
 import { getApiKey, getAppApiKey } from '../../services/secureStorage';
 import { presentProPaywall } from '../../services/revenueCat';
 import {
@@ -54,6 +55,23 @@ interface Message {
 
 const RATING_MILESTONES = new Set([3, 10, 25]);
 const STREAK_MILESTONES = new Set([7, 14, 30]);
+const CONTEXT_LIMIT = 20;     // max messages sent to API
+const FRESH_WINDOW = 10;      // messages kept verbatim when a summary exists
+const SUMMARY_THRESHOLD = 22; // trigger background summarization after this many messages
+
+function buildContextWindow(
+  messages: Message[],
+  summary: string | null,
+): { role: 'user' | 'assistant'; content: string }[] {
+  const raw = messages.map(m => ({ role: m.role, content: m.content }));
+  if (raw.length <= CONTEXT_LIMIT) return raw;
+  if (!summary) return raw.slice(-CONTEXT_LIMIT);
+  return [
+    { role: 'user' as const, content: `[Earlier conversation summary: ${summary}]` },
+    { role: 'assistant' as const, content: 'Understood — I have context from our earlier discussion.' },
+    ...raw.slice(-FRESH_WINDOW),
+  ];
+}
 // Fill in once the app is submitted to the App Store
 const APP_STORE_ID = '';
 
@@ -157,6 +175,8 @@ export default function ChatScreen() {
   const retryContentRef = useRef<string | null>(null);
   const listRef = useRef<FlatList>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const conversationSummaryRef = useRef<string | null>(null);
+  const isSpeakingRef = useRef(false);
 
   // Ref mirrors — updated every render so `send` (stable []) always sees current values
   const messagesRef = useRef<Message[]>([]);
@@ -296,7 +316,7 @@ export default function ChatScreen() {
     }
 
     const [userCtx, profile] = await Promise.all([getUserContext(), getUserProfile()]);
-    const systemPromptText = buildSystemPrompt(profile, userCtx, responseStyleRef.current);
+    const dynamicPrompt = buildDynamicPrompt(profile, userCtx, responseStyleRef.current);
 
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -330,8 +350,11 @@ export default function ChatScreen() {
           model: 'claude-sonnet-4-6',
           max_tokens: 4096,
           stream: true,
-          system: [{ type: 'text', text: systemPromptText, cache_control: { type: 'ephemeral' } }],
-          messages: nextMessages.slice(-20).map(m => ({ role: m.role, content: m.content })),
+          system: [
+            { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+            ...(dynamicPrompt ? [{ type: 'text' as const, text: dynamicPrompt }] : []),
+          ],
+          messages: buildContextWindow(nextMessages, conversationSummaryRef.current),
         }),
       });
 
@@ -391,7 +414,8 @@ export default function ChatScreen() {
         messages: finalMessages.map(m => ({ role: m.role, content: m.content })),
       });
 
-      if (nextMessages.filter(m => m.role === 'user').length === 1) {
+      const isFirstExchange = nextMessages.filter(m => m.role === 'user').length === 1;
+      if (isFirstExchange) {
         const [count, newStreak] = await Promise.all([
           incrementAndGetConversationCount(),
           updateStreak(),
@@ -404,6 +428,13 @@ export default function ChatScreen() {
         if (RATING_MILESTONES.has(count)) {
           setTimeout(promptAppRating, 1200);
         }
+        // Auto-title: replace the truncated first-message title with a proper one
+        autoTitleConversation(content, fullText, apiKey, conversationId.current);
+      }
+
+      // Context summarization: when conversation grows long, summarize older messages
+      if (finalMessages.length > SUMMARY_THRESHOLD) {
+        summarizeOldMessages(finalMessages.slice(0, -FRESH_WINDOW), apiKey);
       }
 
     } catch (e: unknown) {
@@ -460,8 +491,74 @@ export default function ChatScreen() {
     send(lastUserContent);
   }, [send]);
 
+  const autoTitleConversation = useCallback(async (
+    userMsg: string,
+    assistantReply: string,
+    apiKey: string,
+    convId: string,
+  ) => {
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 16,
+          messages: [{
+            role: 'user',
+            content: `Write a 3-5 word title for this Agile coaching exchange. Reply with ONLY the title, no punctuation or quotes.\n\nUser: ${userMsg.slice(0, 150)}\nCoach: ${assistantReply.slice(0, 150)}`,
+          }],
+        }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const title = (data.content?.[0]?.text ?? '').trim().replace(/['"]/g, '');
+      if (!title) return;
+      conversationTitleRef.current = title;
+      const convs = await getConversations();
+      const conv = convs.find(c => c.id === convId);
+      if (conv) await saveConversation({ ...conv, title });
+    } catch {}
+  }, []);
+
+  const summarizeOldMessages = useCallback(async (
+    oldMessages: Message[],
+    apiKey: string,
+  ) => {
+    try {
+      const transcript = oldMessages
+        .map(m => `${m.role === 'user' ? 'User' : 'AgileIQ'}: ${m.content}`)
+        .join('\n\n');
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 200,
+          messages: [{
+            role: 'user',
+            content: `Summarize this Agile coaching conversation segment in 3-4 sentences, capturing the key questions, context, and conclusions reached:\n\n${transcript}\n\nSummary:`,
+          }],
+        }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const summary = (data.content?.[0]?.text ?? '').trim();
+      if (summary) conversationSummaryRef.current = summary;
+    } catch {}
+  }, []);
+
   const startNewChat = useCallback(() => {
     abortControllerRef.current?.abort();
+    Speech.stop();
     setMessages([]);
     setError(null);
     setInput('');
@@ -470,6 +567,7 @@ export default function ChatScreen() {
     AsyncStorage.setItem('chat_draft', '');
     conversationId.current = Date.now().toString();
     conversationTitleRef.current = '';
+    conversationSummaryRef.current = null;
   }, []);
 
   const handleScroll = useCallback((e: any) => {
@@ -678,6 +776,7 @@ const MessageBubble = React.memo(function MessageBubble({
   onRegenerate: () => void;
 }) {
   const isUser = message.role === 'user';
+  const [speaking, setSpeaking] = React.useState(false);
 
   const handleLongPress = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -689,6 +788,29 @@ const MessageBubble = React.memo(function MessageBubble({
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await Clipboard.setStringAsync(message.content);
     onCopy();
+  };
+
+  const handleSpeak = async () => {
+    if (speaking) {
+      await Speech.stop();
+      setSpeaking(false);
+      return;
+    }
+    setSpeaking(true);
+    // Strip markdown syntax before speaking
+    const plain = message.content
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/#{1,6}\s/g, '')
+      .replace(/`{1,3}[^`]*`{1,3}/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+    Speech.speak(plain, {
+      language: 'en-US',
+      rate: 0.95,
+      onDone: () => setSpeaking(false),
+      onError: () => setSpeaking(false),
+      onStopped: () => setSpeaking(false),
+    });
   };
 
   const timeLabel = message.timestamp
@@ -725,6 +847,9 @@ const MessageBubble = React.memo(function MessageBubble({
             </TouchableOpacity>
             <TouchableOpacity onPress={onShare} style={styles.msgAction} activeOpacity={0.7}>
               <Text style={styles.msgActionText}>↑ Share</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleSpeak} style={[styles.msgAction, speaking && styles.msgActionSpeaking]} activeOpacity={0.7}>
+              <Text style={[styles.msgActionText, speaking && styles.msgActionTextSpeaking]}>{speaking ? '◼ Stop' : '♪ Read'}</Text>
             </TouchableOpacity>
             {isLast && (
               <TouchableOpacity onPress={onRegenerate} style={styles.msgAction} activeOpacity={0.7}>
@@ -993,6 +1118,8 @@ const styles = StyleSheet.create({
   },
   msgActionText: { fontSize: 12, color: Colors.textSecondary, fontWeight: '500' },
   msgActionTextCopy: { color: Colors.tealLight, fontWeight: '600' },
+  msgActionSpeaking: { borderColor: Colors.teal, backgroundColor: Colors.tealDim },
+  msgActionTextSpeaking: { color: Colors.tealLight, fontWeight: '600' },
   followUps: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 4, gap: 8 },
   followUpChip: {
     alignSelf: 'flex-start',

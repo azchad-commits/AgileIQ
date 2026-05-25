@@ -8,6 +8,7 @@ import { initializePurchases, syncProStatus } from '../services/revenueCat';
 import { hasSeenOnboarding, setOnboardingSeen } from '../services/storage';
 import { getTodaysTip } from '../services/notifications';
 import { OnboardingModal } from '../components/OnboardingModal';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 export default function RootLayout() {
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -44,16 +45,18 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false }} />
-      <OnboardingModal
-        visible={showOnboarding}
-        onDismiss={async () => {
-          await setOnboardingSeen();
-          setShowOnboarding(false);
-        }}
-      />
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <StatusBar style="light" />
+        <Stack screenOptions={{ headerShown: false }} />
+        <OnboardingModal
+          visible={showOnboarding}
+          onDismiss={async () => {
+            await setOnboardingSeen();
+            setShowOnboarding(false);
+          }}
+        />
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }

@@ -33,32 +33,44 @@ interface ProfileShape {
 
 export type ResponseStyle = 'concise' | 'balanced' | 'detailed';
 
+// Returns the per-call dynamic addon (profile, context, style) — NOT cached.
+// Keep small; the large stable SYSTEM_PROMPT above gets the cache_control block.
+export function buildDynamicPrompt(
+  profile?: ProfileShape | null,
+  userContext?: string,
+  responseStyle?: ResponseStyle,
+): string {
+  const parts: string[] = [];
+
+  if (profile) {
+    const profileParts: string[] = [];
+    if (profile.role) profileParts.push(`role: ${profile.role}`);
+    if (profile.maturity) profileParts.push(`team maturity: ${profile.maturity}`);
+    if (profile.framework) profileParts.push(`primary framework: ${profile.framework}`);
+    if (profileParts.length > 0) {
+      parts.push(`User profile — ${profileParts.join(', ')}. Tailor your coaching specifically to this context.`);
+    }
+  }
+
+  if (userContext?.trim()) {
+    parts.push(`Additional context: ${userContext.trim()}`);
+  }
+
+  if (responseStyle === 'concise') {
+    parts.push('Response style: Be extremely concise. Lead with the direct answer in 1–2 sentences. Use bullets only when listing 3+ items. Skip all preamble and summary — get straight to the point.');
+  } else if (responseStyle === 'detailed') {
+    parts.push('Response style: Be comprehensive. Cover the topic thoroughly with examples, context, and nuance. Include practical steps, edge cases, and deeper rationale. The user wants depth — do not truncate.');
+  }
+
+  return parts.join('\n\n');
+}
+
+// Legacy: kept for any callers that still use the combined prompt
 export function buildSystemPrompt(
   profile?: ProfileShape | null,
   userContext?: string,
   responseStyle?: ResponseStyle,
 ): string {
-  let text = SYSTEM_PROMPT;
-
-  if (profile) {
-    const parts: string[] = [];
-    if (profile.role) parts.push(`role: ${profile.role}`);
-    if (profile.maturity) parts.push(`team maturity: ${profile.maturity}`);
-    if (profile.framework) parts.push(`primary framework: ${profile.framework}`);
-    if (parts.length > 0) {
-      text += `\n\nUser profile — ${parts.join(', ')}. Tailor your coaching specifically to this context throughout the conversation.`;
-    }
-  }
-
-  if (userContext?.trim()) {
-    text += `\n\nAdditional context: ${userContext.trim()}`;
-  }
-
-  if (responseStyle === 'concise') {
-    text += '\n\nResponse style: Be extremely concise. Lead with the direct answer in 1–2 sentences. Use bullets only when listing 3+ items. Skip all preamble and summary — get straight to the point.';
-  } else if (responseStyle === 'detailed') {
-    text += '\n\nResponse style: Be comprehensive. Cover the topic thoroughly with examples, context, and nuance. Include practical steps, edge cases, and deeper rationale. The user wants depth — do not truncate.';
-  }
-
-  return text;
+  const addon = buildDynamicPrompt(profile, userContext, responseStyle);
+  return addon ? `${SYSTEM_PROMPT}\n\n${addon}` : SYSTEM_PROMPT;
 }

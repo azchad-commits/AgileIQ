@@ -221,15 +221,21 @@ interface StreakData {
   count: number;
 }
 
+function daysAgoStr(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().split('T')[0];
+}
+
 export async function getStreak(): Promise<number> {
   const raw = await AsyncStorage.getItem(STREAK_KEY);
   if (!raw) return 0;
   const data: StreakData = JSON.parse(raw);
   const t = today();
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yStr = yesterday.toISOString().split('T')[0];
-  if (data.lastDate === t || data.lastDate === yStr) return data.count;
+  // Show streak if active today, yesterday, or within grace window (2 days ago)
+  if (data.lastDate === t || data.lastDate === daysAgoStr(1) || data.lastDate === daysAgoStr(2)) {
+    return data.count;
+  }
   return 0;
 }
 
@@ -242,10 +248,18 @@ export async function updateStreak(): Promise<number> {
   }
   const data: StreakData = JSON.parse(raw);
   if (data.lastDate === t) return data.count;
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yStr = yesterday.toISOString().split('T')[0];
-  const newCount = data.lastDate === yStr ? data.count + 1 : 1;
+
+  let newCount: number;
+  if (data.lastDate === daysAgoStr(1)) {
+    // Perfect streak: used app yesterday
+    newCount = data.count + 1;
+  } else if (data.lastDate === daysAgoStr(2)) {
+    // Grace period: missed exactly one day — preserve streak, don't increment
+    newCount = data.count;
+  } else {
+    // Missed 2+ days — reset
+    newCount = 1;
+  }
   await AsyncStorage.setItem(STREAK_KEY, JSON.stringify({ lastDate: t, count: newCount }));
   return newCount;
 }
