@@ -35,7 +35,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "AgileIQ needs access to your photos to analyze project boards and roadmaps."
+          "photosPermission": "AgileIQ needs access to your photos to analyze project boards and roadmaps.",
+          "cameraPermission": "AgileIQ needs camera access to photograph your Agile boards for analysis."
         }
       ],
     ],

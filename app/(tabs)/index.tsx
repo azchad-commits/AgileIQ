@@ -9,30 +9,58 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
+  Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import Markdown from 'react-native-markdown-display';
 import { Colors } from '../../constants/colors';
-import { SYSTEM_PROMPT } from '../../constants/systemPrompt';
+import { buildSystemPrompt } from '../../constants/systemPrompt';
 import { getApiKey } from '../../services/secureStorage';
 import {
-  checkAndIncrementDailyCount,
-  getRemainingQuestions,
   saveConversation,
-  getIsPro,
   getConversations,
-  FREE_TIER_LIMIT,
-  PRO_TIER_LIMIT,
+  incrementAndGetConversationCount,
+  getUserContext,
+  getUserProfile,
+  saveFavorite,
+  type Favorite,
 } from '../../services/storage';
-import { presentProPaywall } from '../../services/revenueCat';
+import { friendlyApiError, isNetworkError } from '../../services/apiErrors';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  timestamp?: number;
+}
+
+const RATING_MILESTONES = new Set([3, 10, 25]);
+// Fill in once the app is submitted to the App Store
+const APP_STORE_ID = '';
+
+function promptAppRating() {
+  if (!APP_STORE_ID) return;
+  Alert.alert(
+    'Enjoying AgileIQ?',
+    'Would you like to leave a review? It really helps!',
+    [
+      { text: 'Not now', style: 'cancel' },
+      {
+        text: 'Rate App',
+        onPress: () => {
+          const url = Platform.OS === 'ios'
+            ? `itms-apps://itunes.apple.com/app/id${APP_STORE_ID}?action=write-review`
+            : 'market://details?id=com.agileiq.app';
+          Linking.openURL(url).catch(() => {});
+        },
+      },
+    ],
+  );
 }
 
 const SUGGESTIONS = [
@@ -42,43 +70,51 @@ const SUGGESTIONS = [
   "What's the difference between a Product Owner and a Project Manager?",
 ];
 
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12) return 'Good morning';
+  if (h >= 12 && h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+const FOLLOW_UP_POOL = [
+  'Give me a concrete example',
+  'How do I apply this to my team?',
+  'What are the common pitfalls?',
+  'What should I do first?',
+  'How does this scale?',
+  'What does the Scrum Guide say?',
+  'What if the team is resistant?',
+  'How do we measure success here?',
+];
+
 export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [remaining, setRemaining] = useState(FREE_TIER_LIMIT);
-  const [isPro, setIsProState] = useState(false);
-  const [isByok, setIsByok] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
 
   const conversationId = useRef(Date.now().toString());
+  const conversationTitleRef = useRef('');
   const streamingIdRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const retryContentRef = useRef<string | null>(null);
   const listRef = useRef<FlatList>(null);
 
   // Ref mirrors — updated every render so `send` (stable []) always sees current values
   const messagesRef = useRef<Message[]>([]);
   const loadingRef = useRef(false);
+  const inputRef = useRef('');
   messagesRef.current = messages;
   loadingRef.current = loading;
+  inputRef.current = input;
 
-  const { prompt, t, continueId } = useLocalSearchParams<{ prompt?: string; t?: string; continueId?: string }>();
+  const { prompt, t, continueId, newChat } = useLocalSearchParams<{ prompt?: string; t?: string; continueId?: string; newChat?: string }>();
   const lastParamKeyRef = useRef('');
   const lastContinueIdRef = useRef('');
-
-  useEffect(() => {
-    (async () => {
-      const [key, pro] = await Promise.all([getApiKey(), getIsPro()]);
-      const byok = !!key;
-      setIsByok(byok);
-      setIsProState(pro);
-      if (!byok) {
-        const limit = pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
-        setRemaining(await getRemainingQuestions(limit));
-      }
-    })();
-  }, []);
 
   // Continue an existing conversation
   useEffect(() => {
@@ -89,19 +125,38 @@ export default function ChatScreen() {
       if (!conv) return;
       setMessages(conv.messages.map((m, i) => ({ id: String(i), role: m.role, content: m.content })));
       conversationId.current = conv.id;
+      conversationTitleRef.current = conv.title;
     });
   }, [continueId]);
 
-  // Topics → Chat param
+  // Prompt param (from Topics, Tools, etc.)
   useEffect(() => {
     const key = `${t ?? ''}::${prompt ?? ''}`;
     if (prompt && key !== lastParamKeyRef.current) {
       lastParamKeyRef.current = key;
+      if (newChat === '1') {
+        // Reset conversation synchronously via refs so send() sees a clean slate
+        messagesRef.current = [];
+        setMessages([]);
+        setError(null);
+        setIsOffline(false);
+        conversationId.current = Date.now().toString();
+        conversationTitleRef.current = '';
+        AsyncStorage.setItem('chat_draft', '');
+      }
       send(prompt);
     }
   // send is stable ([] deps) — intentional omission
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prompt, t]);
+  }, [prompt, t, newChat]);
+
+  // Draft persistence — save on blur, restore on focus (only for empty chats)
+  useFocusEffect(useCallback(() => {
+    AsyncStorage.getItem('chat_draft').then(draft => {
+      if (draft && messagesRef.current.length === 0) setInput(draft);
+    });
+    return () => { AsyncStorage.setItem('chat_draft', inputRef.current); };
+  }, []));
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -111,6 +166,8 @@ export default function ChatScreen() {
   const send = useCallback(async (text: string) => {
     const content = text.trim();
     if (!content || loadingRef.current) return;
+    retryContentRef.current = null;
+    setIsOffline(false);
 
     const apiKey = await getApiKey();
     if (!apiKey) {
@@ -118,30 +175,16 @@ export default function ChatScreen() {
       return;
     }
 
-    // BYOK: user pays Anthropic directly → unlimited, skip all daily limits
-    const byok = !!apiKey;
-    if (!byok) {
-      const pro = await getIsPro();
-      const limit = pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
-      const allowed = await checkAndIncrementDailyCount(limit);
-      if (!allowed) {
-        if (!pro) {
-          const upgraded = await presentProPaywall();
-          if (upgraded) setIsProState(true);
-        } else {
-          setError(`You've reached your ${PRO_TIER_LIMIT} question daily limit. Come back tomorrow!`);
-        }
-        return;
-      }
-      setRemaining(r => Math.max(0, r - 1));
-    }
+    const [userCtx, profile] = await Promise.all([getUserContext(), getUserProfile()]);
+    const systemPromptText = buildSystemPrompt(profile, userCtx);
 
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content };
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', content, timestamp: Date.now() };
     const nextMessages = [...messagesRef.current, userMsg];
     setMessages(nextMessages);
     setInput('');
+    AsyncStorage.setItem('chat_draft', '');
     setError(null);
     setLoading(true);
 
@@ -159,22 +202,25 @@ export default function ChatScreen() {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'prompt-caching-2024-07-31',
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 2048,
           stream: true,
-          system: SYSTEM_PROMPT,
-          messages: nextMessages.map(m => ({ role: m.role, content: m.content })),
+          system: [{ type: 'text', text: systemPromptText, cache_control: { type: 'ephemeral' } }],
+          messages: nextMessages.slice(-20).map(m => ({ role: m.role, content: m.content })),
         }),
       });
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error((err as any)?.error?.message ?? `API error ${res.status}`);
+        const errType: string = (err as any)?.error?.type ?? '';
+        const errMsg: string = (err as any)?.error?.message ?? `API error ${res.status}`;
+        throw new Error(`${errType}:${errMsg}`);
       }
 
-      setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '' }]);
+      setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '', timestamp: Date.now() }]);
 
       const reader = res.body?.getReader();
       if (!reader) throw new Error('Streaming not supported on this platform.');
@@ -208,25 +254,36 @@ export default function ChatScreen() {
 
       streamingIdRef.current = null;
 
+      // Preserve title across saves — only set it on the first message
+      if (!conversationTitleRef.current) {
+        conversationTitleRef.current = content.slice(0, 60);
+      }
+
       const finalMessages = [
         ...nextMessages,
         { id: assistantId, role: 'assistant' as const, content: fullText },
       ];
       await saveConversation({
         id: conversationId.current,
-        title: content.slice(0, 60),
+        title: conversationTitleRef.current,
         date: new Date().toISOString(),
         messages: finalMessages.map(m => ({ role: m.role, content: m.content })),
       });
 
+      if (nextMessages.filter(m => m.role === 'user').length === 1) {
+        const count = await incrementAndGetConversationCount();
+        if (RATING_MILESTONES.has(count)) {
+          setTimeout(promptAppRating, 1200);
+        }
+      }
+
     } catch (e: unknown) {
       const isAbort = e instanceof Error && e.name === 'AbortError';
       if (!isAbort) {
-        setMessages(prev => prev.filter(m => m.id !== assistantId));
-        const msg = e instanceof Error ? e.message : 'Something went wrong.';
-        const isOffline = msg.toLowerCase().includes('network request failed')
-          || msg.toLowerCase().includes('failed to fetch');
-        setError(isOffline ? 'No internet connection. Check your network and try again.' : msg);
+        setMessages(prev => prev.filter(m => m.id !== assistantId && m.id !== userMsg.id));
+        retryContentRef.current = content;
+        if (isNetworkError(e)) setIsOffline(true);
+        setError(friendlyApiError(e));
       }
       streamingIdRef.current = null;
     } finally {
@@ -241,11 +298,31 @@ export default function ChatScreen() {
     abortControllerRef.current?.abort();
   }, []);
 
+  const handleSaveMessage = useCallback(async (msg: Message) => {
+    const fav: Favorite = {
+      id: msg.id,
+      content: msg.content,
+      conversationTitle: conversationTitleRef.current || 'Conversation',
+      savedAt: new Date().toISOString(),
+    };
+    await saveFavorite(fav);
+    showToast('Saved to Favorites');
+  }, [showToast]);
+
   const startNewChat = useCallback(() => {
     setMessages([]);
     setError(null);
     setInput('');
+    setIsOffline(false);
+    AsyncStorage.setItem('chat_draft', '');
     conversationId.current = Date.now().toString();
+    conversationTitleRef.current = '';
+  }, []);
+
+  const handleScroll = useCallback((e: any) => {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const distFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+    setShowScrollBtn(distFromBottom > 120);
   }, []);
 
   return (
@@ -255,37 +332,56 @@ export default function ChatScreen() {
           <Text style={styles.headerTitle}>AgileIQ</Text>
           <Text style={styles.headerSub}>AI Agile Coach</Text>
         </View>
-        <View style={styles.headerRight}>
-          {(isByok || isPro) ? (
-            <Text style={styles.proBadge}>Pro ✦</Text>
-          ) : (
-            <Text style={[styles.remainingBadge, remaining <= 1 && styles.remainingLow]}>
-              {remaining}/{FREE_TIER_LIMIT} free today
-            </Text>
-          )}
-          {messages.length > 0 && (
-            <TouchableOpacity onPress={startNewChat} style={styles.newChatBtn} activeOpacity={0.7}>
-              <Text style={styles.newChatText}>+ New</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        {messages.length > 0 && (
+          <TouchableOpacity onPress={startNewChat} style={styles.newChatBtn} activeOpacity={0.7}>
+            <Text style={styles.newChatText}>+ New</Text>
+          </TouchableOpacity>
+        )}
       </View>
+
+      {isOffline && (
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineText}>No internet connection</Text>
+        </View>
+      )}
 
       <FlatList
         ref={listRef}
         data={messages}
         keyExtractor={m => m.id}
         contentContainerStyle={[styles.list, messages.length === 0 && styles.listEmpty]}
+        keyboardDismissMode="on-drag"
+        removeClippedSubviews={Platform.OS === 'android'}
+        maxToRenderPerBatch={10}
+        windowSize={10}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         ListEmptyComponent={<EmptyState onSuggestion={s => send(s)} />}
+        ListFooterComponent={
+          !loading && messages.length > 0
+            ? <FollowUpChips messages={messages} onSelect={send} />
+            : null
+        }
         renderItem={({ item }) => (
           <MessageBubble
             message={item}
             isStreaming={loading && item.id === streamingIdRef.current}
             onCopy={() => showToast('Copied')}
+            onSave={() => handleSaveMessage(item)}
           />
         )}
       />
+
+      {showScrollBtn && (
+        <TouchableOpacity
+          style={styles.scrollBtn}
+          onPress={() => listRef.current?.scrollToEnd({ animated: true })}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.scrollBtnIcon}>↓</Text>
+        </TouchableOpacity>
+      )}
 
       {!!toast && (
         <View style={styles.toastWrapper} pointerEvents="none">
@@ -298,37 +394,53 @@ export default function ChatScreen() {
       {!!error && (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{error}</Text>
+          {retryContentRef.current && (
+            <TouchableOpacity
+              style={styles.retryBtn}
+              onPress={() => { setError(null); send(retryContentRef.current!); }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.retryText}>Retry</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <SafeAreaView edges={['bottom']} style={styles.inputWrapper}>
-          <TextInput
-            style={styles.input}
-            value={input}
-            onChangeText={setInput}
-            placeholder="Ask about Agile, Scrum, SAFe..."
-            placeholderTextColor={Colors.grayDark}
-            multiline
-            maxLength={1000}
-            returnKeyType="send"
-            blurOnSubmit
-            onSubmitEditing={handleSend}
-          />
-          {loading ? (
-            <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} activeOpacity={0.8}>
-              <Text style={styles.cancelIcon}>✕</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
-              onPress={handleSend}
-              disabled={!input.trim()}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.sendArrow}>↑</Text>
-            </TouchableOpacity>
+        <SafeAreaView edges={['bottom']} style={styles.inputOuter}>
+          {input.length > 800 && (
+            <Text style={[styles.charCount, input.length > 950 && styles.charCountWarn]}>
+              {1000 - input.length} chars left
+            </Text>
           )}
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.input}
+              value={input}
+              onChangeText={setInput}
+              placeholder="Ask about Agile, Scrum, SAFe..."
+              placeholderTextColor={Colors.grayDark}
+              multiline
+              maxLength={1000}
+              returnKeyType="send"
+              blurOnSubmit
+              onSubmitEditing={handleSend}
+            />
+            {loading ? (
+              <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} activeOpacity={0.8}>
+                <Text style={styles.cancelIcon}>✕</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
+                onPress={handleSend}
+                disabled={!input.trim()}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.sendArrow}>↑</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </SafeAreaView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -373,10 +485,12 @@ function MessageBubble({
   message,
   isStreaming,
   onCopy,
+  onSave,
 }: {
   message: Message;
   isStreaming: boolean;
   onCopy: () => void;
+  onSave: () => void;
 }) {
   const isUser = message.role === 'user';
 
@@ -386,34 +500,57 @@ function MessageBubble({
     onCopy();
   };
 
+  const handleCopy = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await Clipboard.setStringAsync(message.content);
+    onCopy();
+  };
+
+  const timeLabel = message.timestamp
+    ? new Date(message.timestamp).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    : null;
+
   return (
-    <TouchableOpacity
-      onLongPress={handleLongPress}
-      activeOpacity={0.85}
-      style={[styles.bubbleRow, isUser && styles.bubbleRowUser]}
-    >
-      <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
-        {!isUser && <Text style={styles.senderLabel}>AgileIQ</Text>}
-        {isUser ? (
-          <Text style={styles.bubbleTextUser}>{message.content}</Text>
-        ) : isStreaming && !message.content ? (
-          <TypingDots />
-        ) : (
-          <Markdown style={markdownStyles}>
-            {message.content + (isStreaming ? '▌' : '')}
-          </Markdown>
+    <View style={[styles.bubbleRow, isUser && styles.bubbleRowUser]}>
+      <View style={styles.bubbleWrap}>
+        <TouchableOpacity onLongPress={handleLongPress} activeOpacity={0.85}>
+          <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
+            {!isUser && <Text style={styles.senderLabel}>AgileIQ</Text>}
+            {isUser ? (
+              <Text style={styles.bubbleTextUser}>{message.content}</Text>
+            ) : isStreaming && !message.content ? (
+              <TypingDots />
+            ) : (
+              <Markdown style={markdownStyles}>
+                {message.content + (isStreaming ? '▌' : '')}
+              </Markdown>
+            )}
+            {timeLabel && !isStreaming && (
+              <Text style={[styles.bubbleTime, isUser && styles.bubbleTimeUser]}>{timeLabel}</Text>
+            )}
+          </View>
+        </TouchableOpacity>
+        {!isUser && !isStreaming && !!message.content && (
+          <View style={styles.msgActions}>
+            <TouchableOpacity onPress={handleCopy} style={styles.msgAction} activeOpacity={0.7}>
+              <Text style={styles.msgActionText}>Copy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onSave} style={styles.msgAction} activeOpacity={0.7}>
+              <Text style={styles.msgActionText}>Save</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
 function EmptyState({ onSuggestion }: { onSuggestion: (text: string) => void }) {
   return (
     <View style={styles.empty}>
-      <Text style={styles.emptyTitle}>Ask your Agile coach</Text>
+      <Text style={styles.emptyTitle}>{getGreeting()}</Text>
       <Text style={styles.emptySub}>
-        Expert guidance on Scrum, SAFe, sprint planning, retrospectives, team dynamics, and more.
+        I'm AgileIQ. Ask me anything about Scrum, SAFe, coaching, sprints, and more.
       </Text>
       {SUGGESTIONS.map(s => (
         <TouchableOpacity
@@ -430,18 +567,26 @@ function EmptyState({ onSuggestion }: { onSuggestion: (text: string) => void }) 
   );
 }
 
+function FollowUpChips({ messages, onSelect }: { messages: Message[]; onSelect: (text: string) => void }) {
+  const last = messages[messages.length - 1];
+  if (!last || last.role !== 'assistant' || !last.content) return null;
+  const count = messages.filter(m => m.role === 'assistant').length;
+  const start = ((count - 1) * 3) % FOLLOW_UP_POOL.length;
+  const chips = [0, 1, 2].map(i => FOLLOW_UP_POOL[(start + i) % FOLLOW_UP_POOL.length]);
+  return (
+    <View style={styles.followUps}>
+      {chips.map(chip => (
+        <TouchableOpacity key={chip} style={styles.followUpChip} onPress={() => onSelect(chip)} activeOpacity={0.7}>
+          <Text style={styles.followUpText}>{chip}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
 const markdownStyles = StyleSheet.create({
-  body: {
-    color: Colors.text,
-    fontSize: 16,
-    lineHeight: 23,
-    backgroundColor: 'transparent',
-  } as any,
-  paragraph: {
-    marginTop: 0,
-    marginBottom: 6,
-    color: Colors.text,
-  } as any,
+  body: { color: Colors.text, fontSize: 16, lineHeight: 23, backgroundColor: 'transparent' } as any,
+  paragraph: { marginTop: 0, marginBottom: 6, color: Colors.text } as any,
   heading1: { color: Colors.white, fontSize: 19, fontWeight: '700', marginVertical: 6 } as any,
   heading2: { color: Colors.white, fontSize: 17, fontWeight: '700', marginVertical: 4 } as any,
   heading3: { color: Colors.teal, fontSize: 16, fontWeight: '700', marginVertical: 4 } as any,
@@ -460,12 +605,7 @@ const markdownStyles = StyleSheet.create({
     borderRadius: 4,
     paddingHorizontal: 4,
   } as any,
-  fence: {
-    backgroundColor: Colors.navyMid,
-    borderRadius: 8,
-    padding: 12,
-    marginVertical: 8,
-  } as any,
+  fence: { backgroundColor: Colors.navyMid, borderRadius: 8, padding: 12, marginVertical: 8 } as any,
   code_block: {
     color: Colors.tealLight,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
@@ -496,10 +636,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 22, fontWeight: '700', color: Colors.teal, letterSpacing: -0.3 },
   headerSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 1 },
-  headerRight: { alignItems: 'flex-end', gap: 8 },
-  remainingBadge: { fontSize: 11, color: Colors.grayDark, fontWeight: '500' },
-  remainingLow: { color: Colors.error },
-  proBadge: { fontSize: 12, color: Colors.teal, fontWeight: '700' },
   newChatBtn: {
     paddingHorizontal: 12,
     paddingVertical: 5,
@@ -512,11 +648,14 @@ const styles = StyleSheet.create({
   listEmpty: { flex: 1 },
   bubbleRow: { alignItems: 'flex-start' },
   bubbleRowUser: { alignItems: 'flex-end' },
-  bubble: { maxWidth: '84%', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 12 },
+  bubbleWrap: { maxWidth: '84%' },
+  bubble: { borderRadius: 18, paddingHorizontal: 16, paddingVertical: 12 },
   bubbleUser: { backgroundColor: Colors.teal, borderBottomRightRadius: 4 },
   bubbleAssistant: { backgroundColor: Colors.surface, borderBottomLeftRadius: 4 },
   senderLabel: { fontSize: 11, color: Colors.teal, fontWeight: '700', marginBottom: 4 },
   bubbleTextUser: { fontSize: 16, lineHeight: 23, color: Colors.white },
+  bubbleTime: { fontSize: 11, color: Colors.grayDark, marginTop: 6, textAlign: 'left' },
+  bubbleTimeUser: { color: 'rgba(255,255,255,0.6)', textAlign: 'right' },
   toastWrapper: {
     position: 'absolute',
     left: 0,
@@ -542,16 +681,28 @@ const styles = StyleSheet.create({
     borderColor: Colors.error,
   },
   errorText: { color: Colors.error, fontSize: 14, lineHeight: 20 },
-  inputWrapper: {
+  retryBtn: { marginTop: 8, alignSelf: 'flex-start' },
+  retryText: { color: Colors.teal, fontSize: 13, fontWeight: '600' },
+  inputOuter: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.background,
+  },
+  charCount: {
+    fontSize: 11,
+    color: Colors.grayDark,
+    textAlign: 'right',
+    paddingHorizontal: 16,
+    paddingTop: 6,
+  },
+  charCountWarn: { color: Colors.error },
+  inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 10,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
     gap: 10,
-    backgroundColor: Colors.background,
   },
   input: {
     flex: 1,
@@ -585,6 +736,45 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelIcon: { color: Colors.white, fontSize: 16, fontWeight: '700' },
+  msgActions: { flexDirection: 'row', gap: 14, marginTop: 4, marginLeft: 4 },
+  msgAction: {},
+  msgActionText: { fontSize: 11, color: Colors.grayDark, fontWeight: '500' },
+  followUps: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 4, gap: 8 },
+  followUpChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  followUpText: { fontSize: 13, color: Colors.textSecondary, lineHeight: 18 },
+  offlineBanner: {
+    backgroundColor: Colors.errorDim,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.error,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  offlineText: { fontSize: 13, color: Colors.error, fontWeight: '500' },
+  scrollBtn: {
+    position: 'absolute',
+    bottom: 90,
+    right: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  scrollBtnIcon: { fontSize: 18, color: Colors.teal, fontWeight: '700', marginTop: -1 },
   empty: { flex: 1, paddingHorizontal: 24, paddingTop: 48, alignItems: 'center' },
   emptyTitle: { fontSize: 26, fontWeight: '700', color: Colors.text, textAlign: 'center', marginBottom: 12 },
   emptySub: {

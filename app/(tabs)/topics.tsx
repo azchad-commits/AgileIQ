@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { Colors } from '../../constants/colors';
 
 interface Topic {
@@ -91,10 +92,23 @@ const TOPICS: Topic[] = [
       'What is the Toyota Kata and how can I use it with my team?',
     ],
   },
+  {
+    title: 'DevOps',
+    emoji: '🚀',
+    color: '#0EA5E9',
+    prompts: [
+      'What is the relationship between DevOps and Agile?',
+      'How do we implement CI/CD in a Scrum team?',
+      'What does "shifting left" mean and why does it matter?',
+      'How do we measure DevOps success with DORA metrics?',
+      'What is a deployment pipeline and how should we structure ours?',
+    ],
+  },
 ];
 
 export default function TopicsScreen() {
   const handlePrompt = (prompt: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.navigate({ pathname: '/', params: { prompt, t: Date.now().toString() } });
   };
 

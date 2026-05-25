@@ -12,14 +12,15 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import Markdown from 'react-native-markdown-display';
 import { Colors } from '../../constants/colors';
 import { getApiKey } from '../../services/secureStorage';
-import { getIsPro, checkAndIncrementDailyCount, saveConversation, FREE_TIER_LIMIT, PRO_TIER_LIMIT } from '../../services/storage';
-import { presentProPaywall } from '../../services/revenueCat';
+import { saveConversation } from '../../services/storage';
+import { friendlyApiError } from '../../services/apiErrors';
 
 const ANALYSIS_SYSTEM_PROMPT =
   'You are AgileIQ, an expert Agile coach. The user has shared a screenshot — a Jira board, project plan, sprint roadmap, backlog, or team report. Analyze it and provide specific, actionable coaching recommendations. Reference concrete details from the image. Use headers to organize your response.';
@@ -48,46 +49,59 @@ interface PickedImage {
   previewUri: string;
 }
 
+async function pickFromSource(source: 'library' | 'camera'): Promise<PickedImage | null> {
+  if (source === 'camera') {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please allow camera access in Settings.');
+      return null;
+    }
+    const res = await ImagePicker.launchCameraAsync({ base64: true, quality: 0.85 });
+    if (res.canceled || !res.assets?.[0]) return null;
+    const asset = res.assets[0];
+    if (!asset.base64) { Alert.alert('Error', 'Could not read photo.'); return null; }
+    if (asset.base64.length > MAX_IMAGE_B64_CHARS) { Alert.alert('Image too large', 'Please use an image under 5 MB.'); return null; }
+    return { name: `photo_${Date.now()}.jpg`, base64: asset.base64, mimeType: 'image/jpeg', previewUri: asset.uri };
+  } else {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please allow photo library access in Settings.');
+      return null;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'] as any, base64: true, quality: 0.85 });
+    if (res.canceled || !res.assets?.[0]) return null;
+    const asset = res.assets[0];
+    if (!asset.base64) { Alert.alert('Error', 'Could not read image.'); return null; }
+    if (asset.base64.length > MAX_IMAGE_B64_CHARS) { Alert.alert('Image too large', 'Please use an image under 5 MB.'); return null; }
+    return { name: asset.fileName ?? 'screenshot.jpg', base64: asset.base64, mimeType: asset.mimeType ?? 'image/jpeg', previewUri: asset.uri };
+  }
+}
+
 export default function AnalyzeScreen() {
   const [image, setImage] = useState<PickedImage | null>(null);
   const [prompt, setPrompt] = useState('');
   const [result, setResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedConversationId, setSavedConversationId] = useState<string | null>(null);
+  const [showResultView, setShowResultView] = useState(false);
 
   const reset = useCallback(() => {
     setImage(null);
     setPrompt('');
     setResult(null);
     setError(null);
+    setSavedConversationId(null);
+    setShowResultView(false);
   }, []);
 
-  const pickImage = useCallback(async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow photo library access in Settings.');
-      return;
-    }
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'] as any,
-      base64: true,
-      quality: 0.85,
-    });
-    if (res.canceled || !res.assets?.[0]) return;
-    const asset = res.assets[0];
-    if (!asset.base64) { Alert.alert('Error', 'Could not read image.'); return; }
-    if (asset.base64.length > MAX_IMAGE_B64_CHARS) {
-      Alert.alert('Image too large', 'Please use an image under 5 MB.');
-      return;
-    }
-    setImage({
-      name: asset.fileName ?? 'screenshot.jpg',
-      base64: asset.base64,
-      mimeType: asset.mimeType ?? 'image/jpeg',
-      previewUri: asset.uri,
-    });
+  const handlePick = useCallback(async (source: 'library' | 'camera') => {
+    const picked = await pickFromSource(source);
+    if (!picked) return;
+    setImage(picked);
     setResult(null);
     setError(null);
+    setSavedConversationId(null);
   }, []);
 
   const analyze = useCallback(async () => {
@@ -98,23 +112,6 @@ export default function AnalyzeScreen() {
     if (!apiKey) {
       setError('Add your Anthropic API key in Settings to get started.');
       return;
-    }
-
-    // BYOK: user pays Anthropic directly → unlimited
-    const byok = !!apiKey;
-    if (!byok) {
-      const pro = await getIsPro();
-      const limit = pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
-      const allowed = await checkAndIncrementDailyCount(limit);
-      if (!allowed) {
-        if (!pro) {
-          const upgraded = await presentProPaywall();
-          if (!upgraded) return;
-        } else {
-          setError(`You've reached your ${PRO_TIER_LIMIT} question daily limit. Come back tomorrow!`);
-          return;
-        }
-      }
     }
 
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -154,9 +151,11 @@ export default function AnalyzeScreen() {
       const data = await res.json();
       const text: string = data.content?.[0]?.text ?? '';
       setResult(text);
+      setShowResultView(true);
 
+      const convId = Date.now().toString();
       await saveConversation({
-        id: Date.now().toString(),
+        id: convId,
         title: `Analysis: ${image.name.slice(0, 50)}`,
         date: new Date().toISOString(),
         messages: [
@@ -164,12 +163,10 @@ export default function AnalyzeScreen() {
           { role: 'assistant', content: text },
         ],
       });
+      setSavedConversationId(convId);
 
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Something went wrong.';
-      const isOffline = msg.toLowerCase().includes('network request failed')
-        || msg.toLowerCase().includes('failed to fetch');
-      setError(isOffline ? 'No internet connection. Check your network and try again.' : msg);
+      setError(friendlyApiError(e));
     } finally {
       setLoading(false);
     }
@@ -183,23 +180,76 @@ export default function AnalyzeScreen() {
   }, [result]);
 
   // ── Result phase ─────────────────────────────────────────────
-  if (result) {
+  if (showResultView) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={reset} activeOpacity={0.7}>
-            <Text style={styles.backText}>‹ New Analysis</Text>
+          <TouchableOpacity onPress={reset} activeOpacity={0.7} disabled={loading}>
+            <Text style={[styles.backText, loading && styles.backTextDisabled]}>‹ New Analysis</Text>
           </TouchableOpacity>
           <Text style={styles.fileBadge} numberOfLines={1}>{image?.name}</Text>
         </View>
-        <ScrollView contentContainerStyle={styles.resultScroll} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.resultScroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {loading && (
+            <View style={styles.reAnalyzeLoading}>
+              <ActivityIndicator size="small" color={Colors.teal} />
+              <Text style={styles.reAnalyzeLoadingText}>Re-analyzing…</Text>
+            </View>
+          )}
           <TouchableOpacity onLongPress={handleCopyResult} activeOpacity={0.92}>
             <View style={styles.resultCard}>
+              {image && (
+                <View style={styles.resultThumbRow}>
+                  <Image source={{ uri: image.previewUri }} style={styles.resultThumb} resizeMode="cover" />
+                  <Text style={styles.resultThumbName} numberOfLines={2}>{image.name}</Text>
+                </View>
+              )}
               <Text style={styles.resultLabel}>AgileIQ Analysis</Text>
-              <Markdown style={markdownStyles}>{result}</Markdown>
+              <Markdown style={markdownStyles}>{result ?? ''}</Markdown>
             </View>
           </TouchableOpacity>
           <Text style={styles.copyHint}>Long-press to copy</Text>
+          {savedConversationId && (
+            <TouchableOpacity
+              style={styles.discussBtn}
+              onPress={() => router.navigate({ pathname: '/', params: { continueId: savedConversationId } })}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.discussBtnText}>Discuss in Chat</Text>
+            </TouchableOpacity>
+          )}
+
+          <Text style={[styles.sectionLabel, styles.reAnalyzeSectionLabel]}>RE-ANALYZE</Text>
+          <TextInput
+            style={styles.promptInput}
+            value={prompt}
+            onChangeText={setPrompt}
+            placeholder="Ask a different question about this image…"
+            placeholderTextColor={Colors.grayDark}
+            multiline
+            maxLength={500}
+          />
+          {!!error && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+          <TouchableOpacity
+            style={[styles.analyzeBtn, loading && styles.analyzeBtnDisabled]}
+            onPress={analyze}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            {loading
+              ? <ActivityIndicator size="small" color={Colors.white} />
+              : <Text style={styles.analyzeBtnText}>Re-Analyze</Text>
+            }
+          </TouchableOpacity>
+
           <View style={styles.bottomPad} />
         </ScrollView>
       </SafeAreaView>
@@ -219,14 +269,21 @@ export default function AnalyzeScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Pick button */}
+        {/* Pick buttons */}
         {!image && (
           <>
-            <TouchableOpacity style={styles.pickBtn} onPress={pickImage} activeOpacity={0.8}>
-              <Text style={styles.pickIcon}>🖼️</Text>
-              <Text style={styles.pickBtnTitle}>Choose Screenshot</Text>
-              <Text style={styles.pickBtnSub}>Pick from your photo library</Text>
-            </TouchableOpacity>
+            <View style={styles.pickRow}>
+              <TouchableOpacity style={styles.pickBtn} onPress={() => handlePick('library')} activeOpacity={0.8}>
+                <Text style={styles.pickIcon}>🖼️</Text>
+                <Text style={styles.pickBtnTitle}>Library</Text>
+                <Text style={styles.pickBtnSub}>Pick from Photos</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.pickBtn} onPress={() => handlePick('camera')} activeOpacity={0.8}>
+                <Text style={styles.pickIcon}>📷</Text>
+                <Text style={styles.pickBtnTitle}>Camera</Text>
+                <Text style={styles.pickBtnSub}>Take a photo</Text>
+              </TouchableOpacity>
+            </View>
 
             <Text style={styles.sectionLabel}>WHAT TO UPLOAD</Text>
             {HOW_TO_TIPS.map(([icon, title, sub]) => (
@@ -283,6 +340,9 @@ export default function AnalyzeScreen() {
             {!!error && (
               <View style={styles.errorBanner}>
                 <Text style={styles.errorText}>{error}</Text>
+                <TouchableOpacity onPress={analyze} style={styles.retryBtn} activeOpacity={0.8}>
+                  <Text style={styles.retryText}>Try Again</Text>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -363,19 +423,24 @@ const styles = StyleSheet.create({
   fileBadge: { fontSize: 12, color: Colors.grayDark, marginTop: 4 },
   scroll: { padding: 16 },
   resultScroll: { padding: 16 },
+  pickRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 28,
+  },
   pickBtn: {
+    flex: 1,
     backgroundColor: Colors.surface,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: 28,
+    padding: 22,
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 28,
+    gap: 8,
   },
-  pickIcon: { fontSize: 40 },
-  pickBtnTitle: { fontSize: 17, fontWeight: '700', color: Colors.text },
-  pickBtnSub: { fontSize: 13, color: Colors.textSecondary },
+  pickIcon: { fontSize: 34 },
+  pickBtnTitle: { fontSize: 15, fontWeight: '700', color: Colors.text },
+  pickBtnSub: { fontSize: 12, color: Colors.textSecondary, textAlign: 'center' },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',
@@ -446,6 +511,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.error,
   },
   errorText: { color: Colors.error, fontSize: 14, lineHeight: 20 },
+  retryBtn: { marginTop: 8, alignSelf: 'flex-start' },
+  retryText: { color: Colors.teal, fontSize: 13, fontWeight: '600' },
   analyzeBtn: {
     backgroundColor: Colors.teal,
     borderRadius: 14,
@@ -467,6 +534,17 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     padding: 18,
   },
+  resultThumbRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  resultThumb: { width: 48, height: 48, borderRadius: 8 },
+  resultThumbName: { flex: 1, fontSize: 12, color: Colors.grayDark, lineHeight: 18 },
   resultLabel: {
     fontSize: 11,
     fontWeight: '700',
@@ -474,11 +552,47 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 14,
   },
+  backTextDisabled: {
+    opacity: 0.4,
+  },
+  reAnalyzeLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 12,
+    padding: 10,
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  reAnalyzeLoadingText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  reAnalyzeSectionLabel: {
+    marginTop: 24,
+  },
   copyHint: {
     textAlign: 'center',
     fontSize: 12,
     color: Colors.grayDark,
     marginTop: 12,
+  },
+  discussBtn: {
+    marginTop: 16,
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.teal,
+    padding: 14,
+    alignItems: 'center',
+  },
+  discussBtnText: {
+    color: Colors.teal,
+    fontWeight: '700',
+    fontSize: 15,
   },
   bottomPad: { height: 32 },
 });

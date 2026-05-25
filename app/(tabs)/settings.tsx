@@ -12,66 +12,58 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
+import Constants from 'expo-constants';
 import { Colors } from '../../constants/colors';
 import { getApiKey, setApiKey, deleteApiKey } from '../../services/secureStorage';
-import { getRemainingQuestions, getIsPro, FREE_TIER_LIMIT, PRO_TIER_LIMIT } from '../../services/storage';
-import { purchasePro, restorePurchases, syncProStatus } from '../../services/revenueCat';
+import { getUserContext, setUserContext as saveUserContext } from '../../services/storage';
+import { OnboardingModal } from '../../components/OnboardingModal';
 
 export default function SettingsScreen() {
   const [apiKey, setApiKeyState] = useState('');
   const [savedKey, setSavedKey] = useState<string | null>(null);
-  const [remaining, setRemaining] = useState(FREE_TIER_LIMIT);
-  const [isPro, setIsProState] = useState(false);
-  const [isByok, setIsByok] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [purchasing, setPurchasing] = useState(false);
-  const [restoring, setRestoring] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<'valid' | string | null>(null);
+  const [showIntro, setShowIntro] = useState(false);
+  const [userContext, setUserContext] = useState('');
 
   const load = useCallback(async () => {
-    const [key, pro] = await Promise.all([getApiKey(), getIsPro()]);
-    const byok = !!key;
+    const key = await getApiKey();
     setSavedKey(key);
-    setIsProState(pro);
-    setIsByok(byok);
     if (key) setApiKeyState(key);
-    if (!byok) {
-      const limit = pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
-      setRemaining(await getRemainingQuestions(limit));
-    }
+    setTestResult(null);
+    const ctx = await getUserContext();
+    setUserContext(ctx);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const handleUpgrade = async () => {
-    setPurchasing(true);
+  const handleTestKey = async () => {
+    if (!savedKey) return;
+    setTesting(true);
+    setTestResult(null);
     try {
-      const { success, cancelled } = await purchasePro();
-      if (success) {
-        setIsProState(true);
-        Alert.alert('Welcome to Pro!', 'You now have unlimited questions.');
-      } else if (!cancelled) {
-        Alert.alert('Purchase failed', 'Please try again.');
+      const res = await fetch('https://api.anthropic.com/v1/models', {
+        headers: {
+          'x-api-key': savedKey,
+          'anthropic-version': '2023-06-01',
+        },
+      });
+      if (res.ok) {
+        setTestResult('valid');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        const type: string = (err as any)?.error?.type ?? '';
+        if (type === 'authentication_error' || res.status === 401) {
+          setTestResult('Invalid API key. Double-check your key.');
+        } else {
+          setTestResult((err as any)?.error?.message ?? `Error ${res.status}`);
+        }
       }
-    } catch (e: any) {
-      Alert.alert('Purchase failed', e.message ?? 'Please try again.');
-    } finally {
-      setPurchasing(false);
-    }
-  };
-
-  const handleRestore = async () => {
-    setRestoring(true);
-    try {
-      const isPro = await restorePurchases();
-      setIsProState(isPro);
-      Alert.alert(
-        isPro ? 'Pro Restored' : 'No Purchase Found',
-        isPro ? 'Your Pro subscription has been restored.' : 'No previous Pro purchase found on this account.',
-      );
     } catch {
-      Alert.alert('Restore failed', 'Please try again.');
+      setTestResult('Network error. Check your connection.');
     } finally {
-      setRestoring(false);
+      setTesting(false);
     }
   };
 
@@ -85,6 +77,7 @@ export default function SettingsScreen() {
     await setApiKey(trimmed);
     setSavedKey(trimmed);
     setSaving(false);
+    setTestResult(null);
     Alert.alert('Saved', 'Your API key has been saved securely.');
   };
 
@@ -98,6 +91,7 @@ export default function SettingsScreen() {
           await deleteApiKey();
           setSavedKey(null);
           setApiKeyState('');
+          setTestResult(null);
         },
       },
     ]);
@@ -116,56 +110,6 @@ export default function SettingsScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* Plan */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>PLAN</Text>
-          <View style={styles.card}>
-            <View style={styles.planRow}>
-              <View>
-                <Text style={styles.planName}>
-                  {isByok ? 'Pro ✦' : isPro ? 'Pro ✦' : 'Free'}
-                </Text>
-                <Text style={styles.planDetail}>
-                  {isByok
-                    ? 'Unlimited · using your own API key'
-                    : isPro
-                    ? `${remaining}/${PRO_TIER_LIMIT} questions today`
-                    : `${remaining}/${FREE_TIER_LIMIT} questions today`}
-                </Text>
-              </View>
-              {!isByok && !isPro && (
-                <TouchableOpacity
-                  style={[styles.upgradeBtn, purchasing && styles.upgradeBtnDisabled]}
-                  onPress={handleUpgrade}
-                  disabled={purchasing}
-                  activeOpacity={0.8}
-                >
-                  {purchasing
-                    ? <ActivityIndicator size="small" color={Colors.white} />
-                    : <Text style={styles.upgradeText}>Upgrade to Pro</Text>
-                  }
-                </TouchableOpacity>
-              )}
-            </View>
-            {!isByok && !isPro && (
-              <>
-                <View style={styles.divider} />
-                <View style={styles.proFeatures}>
-                  <Text style={styles.proLine}>✓  30 questions / day</Text>
-                  <Text style={styles.proLine}>✓  Unlimited with your own API key</Text>
-                  <Text style={styles.proPrice}>$9.99 / month</Text>
-                  <TouchableOpacity onPress={handleRestore} disabled={restoring} style={styles.restoreBtn}>
-                    {restoring
-                      ? <ActivityIndicator size="small" color={Colors.grayDark} />
-                      : <Text style={styles.restoreText}>Restore Purchase</Text>
-                    }
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
-
         {/* API Key */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>ANTHROPIC API KEY</Text>
@@ -175,12 +119,33 @@ export default function SettingsScreen() {
           </Text>
           <View style={styles.card}>
             {savedKey ? (
-              <View style={styles.keyRow}>
-                <Text style={styles.maskedKey}>{maskedKey(savedKey)}</Text>
-                <TouchableOpacity onPress={handleDeleteKey} activeOpacity={0.7}>
-                  <Text style={styles.removeText}>Remove</Text>
-                </TouchableOpacity>
-              </View>
+              <>
+                <View style={styles.keyRow}>
+                  <Text style={styles.maskedKey}>{maskedKey(savedKey)}</Text>
+                  <View style={styles.keyActions}>
+                    <TouchableOpacity
+                      onPress={handleTestKey}
+                      disabled={testing}
+                      activeOpacity={0.7}
+                      style={styles.testBtn}
+                    >
+                      {testing
+                        ? <ActivityIndicator size="small" color={Colors.teal} />
+                        : <Text style={styles.testText}>Test</Text>}
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleDeleteKey} activeOpacity={0.7}>
+                      <Text style={styles.removeText}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                {testResult && (
+                  <View style={[styles.testBanner, testResult === 'valid' ? styles.testBannerOk : styles.testBannerErr]}>
+                    <Text style={[styles.testBannerText, testResult === 'valid' ? styles.testBannerTextOk : styles.testBannerTextErr]}>
+                      {testResult === 'valid' ? '✓  API key is working' : `✗  ${testResult}`}
+                    </Text>
+                  </View>
+                )}
+              </>
             ) : (
               <>
                 <TextInput
@@ -191,6 +156,7 @@ export default function SettingsScreen() {
                   placeholderTextColor={Colors.grayDark}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  autoFocus
                   secureTextEntry
                 />
                 <TouchableOpacity
@@ -206,20 +172,48 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Coaching Context */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>COACHING CONTEXT</Text>
+          <Text style={styles.sectionHint}>
+            Describe your role and team so AgileIQ tailors every response to your situation.
+          </Text>
+          <View style={styles.card}>
+            <TextInput
+              style={styles.contextInput}
+              value={userContext}
+              onChangeText={setUserContext}
+              onBlur={() => saveUserContext(userContext.trim())}
+              placeholder={'e.g. Scrum Master at a 60-person SaaS company, 2-week sprints, teams of 6–8, using Jira…'}
+              placeholderTextColor={Colors.grayDark}
+              multiline
+              maxLength={300}
+            />
+            <Text style={styles.contextCount}>{userContext.length}/300</Text>
+          </View>
+        </View>
+
         {/* About */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>ABOUT</Text>
           <View style={styles.card}>
             <Row label="App" value="AgileIQ" />
             <View style={styles.divider} />
-            <Row label="Version" value="1.0.0" />
+            <Row label="Version" value={Constants.expoConfig?.version ?? '1.0.0'} />
             <View style={styles.divider} />
             <Row label="AI Model" value="Claude Sonnet" />
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.infoRow} onPress={() => setShowIntro(true)} activeOpacity={0.7}>
+              <Text style={styles.infoLabel}>How to Use</Text>
+              <Text style={styles.infoChevron}>›</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.bottomPad} />
       </ScrollView>
+
+      <OnboardingModal visible={showIntro} onDismiss={() => setShowIntro(false)} />
     </SafeAreaView>
   );
 }
@@ -278,63 +272,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     overflow: 'hidden',
   },
-  planRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-  },
-  planName: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 2,
-  },
-  planDetail: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-  },
-  upgradeBtn: {
-    backgroundColor: Colors.teal,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  upgradeText: {
-    color: Colors.white,
-    fontWeight: '700',
-    fontSize: 13,
-  },
   divider: {
     height: 1,
     backgroundColor: Colors.border,
-  },
-  proFeatures: {
-    padding: 16,
-    gap: 6,
-  },
-  proLine: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    lineHeight: 20,
-  },
-  proPrice: {
-    fontSize: 15,
-    color: Colors.teal,
-    fontWeight: '600',
-    marginTop: 6,
-  },
-  upgradeBtnDisabled: {
-    backgroundColor: Colors.navyMid,
-  },
-  restoreBtn: {
-    marginTop: 10,
-    alignSelf: 'flex-start',
-  },
-  restoreText: {
-    fontSize: 13,
-    color: Colors.grayDark,
-    textDecorationLine: 'underline',
   },
   keyRow: {
     flexDirection: 'row',
@@ -348,16 +288,70 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     flex: 1,
   },
+  keyActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  testBtn: {
+    minWidth: 36,
+    alignItems: 'center',
+  },
+  testText: {
+    fontSize: 14,
+    color: Colors.teal,
+    fontWeight: '600',
+  },
   removeText: {
     fontSize: 14,
     color: Colors.error,
     fontWeight: '500',
+  },
+  testBanner: {
+    marginHorizontal: 12,
+    marginBottom: 12,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  testBannerOk: {
+    backgroundColor: Colors.tealDim,
+    borderColor: Colors.teal,
+  },
+  testBannerErr: {
+    backgroundColor: Colors.errorDim,
+    borderColor: Colors.error,
+  },
+  testBannerText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  testBannerTextOk: {
+    color: Colors.tealLight,
+  },
+  testBannerTextErr: {
+    color: Colors.error,
   },
   keyInput: {
     padding: 16,
     fontSize: 14,
     color: Colors.text,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  contextInput: {
+    padding: 16,
+    fontSize: 14,
+    color: Colors.text,
+    minHeight: 88,
+    textAlignVertical: 'top',
+    lineHeight: 21,
+  },
+  contextCount: {
+    fontSize: 11,
+    color: Colors.grayDark,
+    textAlign: 'right',
+    paddingHorizontal: 16,
+    paddingBottom: 10,
   },
   saveBtn: {
     margin: 12,
@@ -388,6 +382,11 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: 15,
     color: Colors.textSecondary,
+  },
+  infoChevron: {
+    fontSize: 20,
+    color: Colors.grayDark,
+    fontWeight: '300',
   },
   bottomPad: {
     height: 24,

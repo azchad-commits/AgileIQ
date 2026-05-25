@@ -44,11 +44,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="analyze"
+        name="tools"
         options={{
-          title: 'Analyze',
-          tabBarIcon: tabIcon('document-attach-outline', 'document-attach'),
+          title: 'Tools',
+          tabBarIcon: tabIcon('construct-outline', 'construct'),
         }}
+      />
+      <Tabs.Screen
+        name="analyze"
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="history"

@@ -85,6 +85,16 @@ export async function clearAllHistory(): Promise<void> {
   await AsyncStorage.removeItem(CONVERSATIONS_KEY);
 }
 
+export async function renameConversation(id: string, title: string): Promise<void> {
+  const raw = await AsyncStorage.getItem(CONVERSATIONS_KEY);
+  const list: Conversation[] = raw ? JSON.parse(raw) : [];
+  const idx = list.findIndex(c => c.id === id);
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], title };
+    await AsyncStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(list));
+  }
+}
+
 const PRO_KEY = 'is_pro';
 
 export async function getIsPro(): Promise<boolean> {
@@ -94,4 +104,83 @@ export async function getIsPro(): Promise<boolean> {
 
 export async function setIsPro(value: boolean): Promise<void> {
   await AsyncStorage.setItem(PRO_KEY, value ? '1' : '0');
+}
+
+const USER_CONTEXT_KEY = 'user_context';
+
+export async function getUserContext(): Promise<string> {
+  const raw = await AsyncStorage.getItem(USER_CONTEXT_KEY);
+  return raw ?? '';
+}
+
+export async function setUserContext(value: string): Promise<void> {
+  await AsyncStorage.setItem(USER_CONTEXT_KEY, value);
+}
+
+const ONBOARDING_KEY = 'onboarding_seen';
+const CONVERSATION_COUNT_KEY = 'conversation_count';
+
+export async function hasSeenOnboarding(): Promise<boolean> {
+  const raw = await AsyncStorage.getItem(ONBOARDING_KEY);
+  return raw === '1';
+}
+
+export async function setOnboardingSeen(): Promise<void> {
+  await AsyncStorage.setItem(ONBOARDING_KEY, '1');
+}
+
+export async function incrementAndGetConversationCount(): Promise<number> {
+  const raw = await AsyncStorage.getItem(CONVERSATION_COUNT_KEY);
+  const count = raw ? parseInt(raw, 10) + 1 : 1;
+  await AsyncStorage.setItem(CONVERSATION_COUNT_KEY, String(count));
+  return count;
+}
+
+// ── User Profile ─────────────────────────────────────────────────────────────
+
+export interface UserProfile {
+  role: string;
+  maturity: string;
+  framework: string;
+}
+
+const USER_PROFILE_KEY = 'user_profile';
+
+export async function getUserProfile(): Promise<UserProfile | null> {
+  const raw = await AsyncStorage.getItem(USER_PROFILE_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
+
+export async function setUserProfile(profile: UserProfile): Promise<void> {
+  await AsyncStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+}
+
+// ── Favorites ────────────────────────────────────────────────────────────────
+
+export interface Favorite {
+  id: string;
+  content: string;
+  conversationTitle: string;
+  savedAt: string;
+}
+
+const FAVORITES_KEY = 'favorites';
+const MAX_FAVORITES = 100;
+
+export async function getFavorites(): Promise<Favorite[]> {
+  const raw = await AsyncStorage.getItem(FAVORITES_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export async function saveFavorite(fav: Favorite): Promise<void> {
+  const list = await getFavorites();
+  if (list.some(f => f.id === fav.id)) return;
+  list.unshift(fav);
+  if (list.length > MAX_FAVORITES) list.splice(MAX_FAVORITES);
+  await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(list));
+}
+
+export async function deleteFavorite(id: string): Promise<void> {
+  const list = await getFavorites();
+  await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(list.filter(f => f.id !== id)));
 }

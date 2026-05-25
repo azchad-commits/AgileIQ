@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
+  TextInput,
   FlatList,
   TouchableOpacity,
   StyleSheet,
   Platform,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -13,11 +15,13 @@ import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import Markdown from 'react-native-markdown-display';
 import { Colors } from '../../constants/colors';
-import { getConversations, type Conversation } from '../../services/storage';
+import { getConversations, renameConversation, type Conversation } from '../../services/storage';
 
 export default function ConversationDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [conversation, setConversation] = useState<Conversation | null>(null);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
   const listRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -41,6 +45,27 @@ export default function ConversationDetailScreen() {
     );
   }
 
+  const handleStartEditTitle = () => {
+    setTitleDraft(conversation!.title);
+    setEditingTitle(true);
+  };
+
+  const handleSaveTitle = async () => {
+    const trimmed = titleDraft.trim();
+    if (trimmed && trimmed !== conversation!.title) {
+      await renameConversation(id!, trimmed);
+      setConversation(prev => prev ? { ...prev, title: trimmed } : prev);
+    }
+    setEditingTitle(false);
+  };
+
+  const handleShare = async () => {
+    const text = conversation.messages
+      .map(m => `${m.role === 'user' ? 'You' : 'AgileIQ'}: ${m.content}`)
+      .join('\n\n');
+    await Share.share({ message: `${conversation.title}\n\n${text}` });
+  };
+
   const date = new Date(conversation.date);
   const formattedDate = date.toLocaleDateString(undefined, {
     weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
@@ -53,9 +78,30 @@ export default function ConversationDetailScreen() {
           <Text style={styles.backText}>‹ Back</Text>
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>{conversation.title}</Text>
+          {editingTitle ? (
+            <TextInput
+              style={styles.titleInput}
+              value={titleDraft}
+              onChangeText={setTitleDraft}
+              onBlur={handleSaveTitle}
+              onSubmitEditing={handleSaveTitle}
+              returnKeyType="done"
+              autoFocus
+              maxLength={80}
+            />
+          ) : (
+            <TouchableOpacity onPress={handleStartEditTitle} activeOpacity={0.7}>
+              <View style={styles.titleRow}>
+                <Text style={styles.headerTitle} numberOfLines={1}>{conversation.title}</Text>
+                <Text style={styles.editHint}> ✎</Text>
+              </View>
+            </TouchableOpacity>
+          )}
           <Text style={styles.headerDate}>{formattedDate}</Text>
         </View>
+        <TouchableOpacity onPress={handleShare} style={styles.shareBtn} activeOpacity={0.7}>
+          <Text style={styles.shareText}>Share</Text>
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -160,8 +206,22 @@ const styles = StyleSheet.create({
   backBtn: { paddingVertical: 4, paddingRight: 8 },
   backText: { fontSize: 18, color: Colors.teal, fontWeight: '500' },
   headerCenter: { flex: 1 },
-  headerTitle: { fontSize: 16, fontWeight: '600', color: Colors.text },
+  titleRow: { flexDirection: 'row', alignItems: 'center' },
+  headerTitle: { fontSize: 16, fontWeight: '600', color: Colors.text, flexShrink: 1 },
+  editHint: { fontSize: 13, color: Colors.grayDark },
+  titleInput: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.teal,
+    paddingVertical: 2,
+    paddingHorizontal: 0,
+    minWidth: 80,
+  },
   headerDate: { fontSize: 12, color: Colors.textSecondary, marginTop: 1 },
+  shareBtn: { paddingVertical: 4, paddingLeft: 8 },
+  shareText: { fontSize: 15, color: Colors.teal, fontWeight: '500' },
   list: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32, gap: 12 },
   bubbleRow: { alignItems: 'flex-start' },
   bubbleRowUser: { alignItems: 'flex-end' },
