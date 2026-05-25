@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   LayoutAnimation,
   StyleSheet,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -107,10 +108,21 @@ const TOPICS: Topic[] = [
 ];
 
 export default function TopicsScreen() {
+  const [query, setQuery] = useState('');
+
   const handlePrompt = (prompt: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.navigate({ pathname: '/', params: { prompt, t: Date.now().toString() } });
   };
+
+  const q = query.trim().toLowerCase();
+  const displayTopics = q
+    ? TOPICS.map(t => {
+        const titleMatch = t.title.toLowerCase().includes(q);
+        const matchedPrompts = t.prompts.filter(p => p.toLowerCase().includes(q));
+        return { ...t, prompts: titleMatch ? t.prompts : matchedPrompts };
+      }).filter(t => t.prompts.length > 0)
+    : TOPICS;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -119,29 +131,53 @@ export default function TopicsScreen() {
         <Text style={styles.headerSub}>Tap a question to ask AgileIQ</Text>
       </View>
 
+      <View style={styles.searchWrapper}>
+        <TextInput
+          style={styles.searchInput}
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search topics…"
+          placeholderTextColor={Colors.grayDark}
+          autoCapitalize="none"
+          autoCorrect={false}
+          clearButtonMode="while-editing"
+          returnKeyType="search"
+        />
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
+        keyboardDismissMode="on-drag"
       >
-        {TOPICS.map(topic => (
-          <TopicCard key={topic.title} topic={topic} onPrompt={handlePrompt} />
-        ))}
+        {displayTopics.length === 0 ? (
+          <View style={styles.noResults}>
+            <Text style={styles.noResultsText}>No topics match "{query}"</Text>
+          </View>
+        ) : (
+          displayTopics.map(topic => (
+            <TopicCard key={topic.title} topic={topic} onPrompt={handlePrompt} forceExpanded={!!q} />
+          ))
+        )}
         <View style={styles.bottomPad} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function TopicCard({ topic, onPrompt }: { topic: Topic; onPrompt: (p: string) => void }) {
+function TopicCard({ topic, onPrompt, forceExpanded }: { topic: Topic; onPrompt: (p: string) => void; forceExpanded?: boolean }) {
   const [expanded, setExpanded] = React.useState(false);
+  const isExpanded = forceExpanded || expanded;
 
   return (
     <View style={styles.card}>
       <TouchableOpacity
         style={styles.cardHeader}
         onPress={() => {
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setExpanded(e => !e);
+          if (!forceExpanded) {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setExpanded(e => !e);
+          }
         }}
         activeOpacity={0.8}
       >
@@ -150,11 +186,11 @@ function TopicCard({ topic, onPrompt }: { topic: Topic; onPrompt: (p: string) =>
         </View>
         <Text style={styles.cardTitle}>{topic.title}</Text>
         <Text style={[styles.chevron, { color: topic.color }]}>
-          {expanded ? '▲' : '▼'}
+          {isExpanded ? '▲' : '▼'}
         </Text>
       </TouchableOpacity>
 
-      {expanded && (
+      {isExpanded && (
         <View style={styles.promptList}>
           {topic.prompts.map(p => (
             <TouchableOpacity
@@ -195,6 +231,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
     marginTop: 2,
+  },
+  searchWrapper: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  searchInput: {
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    fontSize: 15,
+    color: Colors.text,
+  },
+  noResults: {
+    paddingTop: 48,
+    alignItems: 'center',
+  },
+  noResultsText: {
+    fontSize: 15,
+    color: Colors.textSecondary,
   },
   scroll: {
     padding: 16,

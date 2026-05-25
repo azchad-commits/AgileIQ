@@ -35,6 +35,13 @@ const TIPS = [
   'Done means done. "Done except for testing" is the most expensive phrase in software development.',
 ];
 
+export function getTodaysTip(): string {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 1);
+  const dayOfYear = Math.floor((now.getTime() - start.getTime()) / 86400000);
+  return TIPS[dayOfYear % TIPS.length];
+}
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -58,6 +65,7 @@ export async function scheduleDailyTip(): Promise<void> {
     content: {
       title: 'AgileIQ Daily Tip',
       body: tip,
+      data: { tipPrompt: `Tell me more about this coaching insight: "${tip}"` },
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.CALENDAR,

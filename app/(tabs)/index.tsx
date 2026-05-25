@@ -43,6 +43,7 @@ import {
   type UserProfile,
 } from '../../services/storage';
 import { friendlyApiError, isNetworkError } from '../../services/apiErrors';
+import { getTodaysTip } from '../../services/notifications';
 
 interface Message {
   id: string;
@@ -52,6 +53,7 @@ interface Message {
 }
 
 const RATING_MILESTONES = new Set([3, 10, 25]);
+const STREAK_MILESTONES = new Set([7, 14, 30]);
 // Fill in once the app is submitted to the App Store
 const APP_STORE_ID = '';
 
@@ -378,6 +380,11 @@ export default function ChatScreen() {
           updateStreak(),
         ]);
         setStreak(newStreak);
+        if (STREAK_MILESTONES.has(newStreak)) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setToast(`🔥 ${newStreak}-day streak! Keep coaching.`);
+          setTimeout(() => setToast(null), 2500);
+        }
         if (RATING_MILESTONES.has(count)) {
           setTimeout(promptAppRating, 1200);
         }
@@ -679,6 +686,20 @@ function MessageBubble({
   );
 }
 
+function TipCard({ tip, onAsk }: { tip: string; onAsk: (text: string) => void }) {
+  return (
+    <TouchableOpacity
+      style={styles.tipCard}
+      onPress={() => onAsk(`Tell me more about this coaching insight: "${tip}"`)}
+      activeOpacity={0.8}
+    >
+      <Text style={styles.tipLabel}>💡 DAILY TIP</Text>
+      <Text style={styles.tipText}>{tip}</Text>
+      <Text style={styles.tipCta}>Tap to explore →</Text>
+    </TouchableOpacity>
+  );
+}
+
 function EmptyState({ onSuggestion, profile }: { onSuggestion: (text: string) => void; profile: UserProfile | null }) {
   const roleSuggestions = profile?.role ? ROLE_SUGGESTIONS[profile.role] : null;
   const suggestions = roleSuggestions ?? DEFAULT_SUGGESTIONS;
@@ -692,6 +713,7 @@ function EmptyState({ onSuggestion, profile }: { onSuggestion: (text: string) =>
       <Text style={styles.emptySub}>
         I'm AgileIQ. Ask me anything about Scrum, SAFe, coaching, sprints, and more.
       </Text>
+      <TipCard tip={getTodaysTip()} onAsk={onSuggestion} />
       {suggestions.map(s => (
         <TouchableOpacity
           key={s}
@@ -930,6 +952,18 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginBottom: 36,
   },
+  tipCard: {
+    width: '100%',
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: Colors.teal,
+  },
+  tipLabel: { fontSize: 10, fontWeight: '700', color: Colors.teal, letterSpacing: 0.8, marginBottom: 8 },
+  tipText: { fontSize: 15, color: Colors.text, lineHeight: 22, marginBottom: 10 },
+  tipCta: { fontSize: 12, color: Colors.teal, fontWeight: '600' },
   suggestion: {
     flexDirection: 'row',
     justifyContent: 'space-between',
