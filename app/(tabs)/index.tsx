@@ -156,6 +156,7 @@ export default function ChatScreen() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const retryContentRef = useRef<string | null>(null);
   const listRef = useRef<FlatList>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Ref mirrors — updated every render so `send` (stable []) always sees current values
   const messagesRef = useRef<Message[]>([]);
@@ -241,9 +242,12 @@ export default function ChatScreen() {
     prevLoadingRef.current = loading;
   }, [loading]);
 
-  const showToast = useCallback((msg: string) => {
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
+
+  const showToast = useCallback((msg: string, duration = 1500) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
-    setTimeout(() => setToast(null), 1500);
+    toastTimerRef.current = setTimeout(() => setToast(null), duration);
   }, []);
 
   const send = useCallback(async (text: string) => {
@@ -395,8 +399,7 @@ export default function ChatScreen() {
         setStreak(newStreak);
         if (STREAK_MILESTONES.has(newStreak)) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setToast(`🔥 ${newStreak}-day streak! Keep coaching.`);
-          setTimeout(() => setToast(null), 2500);
+          showToast(`🔥 ${newStreak}-day streak! Keep coaching.`, 2500);
         }
         if (RATING_MILESTONES.has(count)) {
           setTimeout(promptAppRating, 1200);

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -87,10 +87,14 @@ export default function AnalyzeScreen() {
   const [savedConversationId, setSavedConversationId] = useState<string | null>(null);
   const [showResultView, setShowResultView] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
 
   const showToast = useCallback((msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
-    setTimeout(() => setToast(null), 1500);
+    toastTimerRef.current = setTimeout(() => setToast(null), 1500);
   }, []);
 
   const reset = useCallback(() => {

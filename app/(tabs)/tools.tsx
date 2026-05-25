@@ -1051,6 +1051,9 @@ function CeremonyTimerSheet({ visible, onClose }: { visible: boolean; onClose: (
     if (!visible) { clearTimer(); setPhase('setup'); setPreset(null); setCustomMins(''); setTimeLeft(0); setTotalSecs(0); }
   }, [visible]);
 
+  // Clear interval on unmount (tab navigation doesn't flip visible to false)
+  useEffect(() => () => clearTimer(), []);
+
   const tick = useCallback(() => {
     setTimeLeft(t => {
       if (t <= 1) {
@@ -1079,6 +1082,7 @@ function CeremonyTimerSheet({ visible, onClose }: { visible: boolean; onClose: (
   const handlePause = () => { clearTimer(); setPhase('paused'); };
 
   const handleResume = () => {
+    clearTimer();
     setPhase('running');
     intervalRef.current = setInterval(tick, 1000);
   };

@@ -32,10 +32,14 @@ export default function ConversationDetailScreen() {
   const [summarizing, setSummarizing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
 
   const showToast = (msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
-    setTimeout(() => setToast(null), 1500);
+    toastTimerRef.current = setTimeout(() => setToast(null), 1500);
   };
 
   useEffect(() => {

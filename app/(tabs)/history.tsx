@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -365,6 +365,9 @@ export default function HistoryScreen() {
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
   const [undoItem, setUndoItem] = useState<{ type: 'conv' | 'note'; id: string; snapshot: Conversation | Note } | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deleteCommittedRef = useRef(false);
+  const pendingDeleteRef = useRef<{ type: 'conv' | 'note'; id: string } | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     const [convs, favs, nts, pins] = await Promise.all([getConversations(), getFavorites(), getNotes(), getPinnedIds()]);
@@ -376,6 +379,17 @@ export default function HistoryScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  useEffect(() => () => {
+    // On unmount, commit any pending deletion to storage so it doesn't reappear on next mount
+    if (undoTimerRef.current && pendingDeleteRef.current) {
+      clearTimeout(undoTimerRef.current);
+      const p = pendingDeleteRef.current;
+      if (p.type === 'conv') deleteConversation(p.id);
+      else deleteNote(p.id);
+    }
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+  }, []);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await load();
@@ -383,13 +397,27 @@ export default function HistoryScreen() {
   }, [load]);
 
   const commitPendingDelete = () => {
-    if (undoTimerRef.current) { clearTimeout(undoTimerRef.current); undoTimerRef.current = null; }
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+      // Immediately commit the previous pending deletion so it doesn't reappear on reload
+      if (pendingDeleteRef.current) {
+        const p = pendingDeleteRef.current;
+        pendingDeleteRef.current = null;
+        if (p.type === 'conv') deleteConversation(p.id);
+        else deleteNote(p.id);
+      }
+    }
   };
 
   const scheduleDelete = (type: 'conv' | 'note', id: string, snapshot: Conversation | Note) => {
     commitPendingDelete();
+    deleteCommittedRef.current = false;
+    pendingDeleteRef.current = { type, id };
     setUndoItem({ type, id, snapshot });
     undoTimerRef.current = setTimeout(() => {
+      deleteCommittedRef.current = true;
+      pendingDeleteRef.current = null;
       if (type === 'conv') deleteConversation(id);
       else deleteNote(id);
       setUndoItem(null);
@@ -416,9 +444,9 @@ export default function HistoryScreen() {
   };
 
   const handleUndoDelete = () => {
-    if (!undoItem || !undoTimerRef.current) return;
-    clearTimeout(undoTimerRef.current);
-    undoTimerRef.current = null;
+    if (!undoItem || deleteCommittedRef.current) return;
+    if (undoTimerRef.current) { clearTimeout(undoTimerRef.current); undoTimerRef.current = null; }
+    pendingDeleteRef.current = null;
     if (undoItem.type === 'conv') {
       const conv = undoItem.snapshot as Conversation;
       setConversations(prev => [conv, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
@@ -470,8 +498,9 @@ export default function HistoryScreen() {
   const handleCopySaved = async (id: string, content: string) => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await Clipboard.setStringAsync(content);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
     setSavedCopied(id);
-    setTimeout(() => setSavedCopied(null), 1500);
+    copiedTimerRef.current = setTimeout(() => setSavedCopied(null), 1500);
   };
 
   const sq = savedQuery.trim().toLowerCase();
