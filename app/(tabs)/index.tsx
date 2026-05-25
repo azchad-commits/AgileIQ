@@ -28,8 +28,14 @@ import {
   getUserContext,
   getUserProfile,
   saveFavorite,
+  getRemainingQuestions,
+  getIsPro,
+  checkAndIncrementDailyCount,
+  FREE_TIER_LIMIT,
+  PRO_TIER_LIMIT,
   type Favorite,
 } from '../../services/storage';
+import { presentProPaywall } from '../../services/revenueCat';
 import { friendlyApiError, isNetworkError } from '../../services/apiErrors';
 
 interface Message {
@@ -96,6 +102,9 @@ export default function ChatScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [isPro, setIsPro] = useState(false);
+  const [isByok, setIsByok] = useState(false);
+  const [remaining, setRemaining] = useState(FREE_TIER_LIMIT);
 
   const conversationId = useRef(Date.now().toString());
   const conversationTitleRef = useRef('');
@@ -111,6 +120,17 @@ export default function ChatScreen() {
   messagesRef.current = messages;
   loadingRef.current = loading;
   inputRef.current = input;
+
+  // Load Pro/BYOK status and remaining count on mount
+  useEffect(() => {
+    (async () => {
+      const [apiKey, pro] = await Promise.all([getApiKey(), getIsPro()]);
+      const byok = !!apiKey;
+      setIsByok(byok);
+      setIsPro(pro);
+      if (!byok) setRemaining(await getRemainingQuestions(pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT));
+    })();
+  }, []);
 
   const { prompt, t, continueId, newChat } = useLocalSearchParams<{ prompt?: string; t?: string; continueId?: string; newChat?: string }>();
   const lastParamKeyRef = useRef('');
@@ -332,11 +352,20 @@ export default function ChatScreen() {
           <Text style={styles.headerTitle}>AgileIQ</Text>
           <Text style={styles.headerSub}>AI Agile Coach</Text>
         </View>
-        {messages.length > 0 && (
-          <TouchableOpacity onPress={startNewChat} style={styles.newChatBtn} activeOpacity={0.7}>
-            <Text style={styles.newChatText}>+ New</Text>
-          </TouchableOpacity>
-        )}
+        <View style={styles.headerRight}>
+          {(isByok || isPro) ? (
+            <Text style={styles.proBadge}>Pro ✦</Text>
+          ) : (
+            <Text style={[styles.remainingBadge, remaining <= 1 && styles.remainingLow]}>
+              {remaining}/{FREE_TIER_LIMIT} free today
+            </Text>
+          )}
+          {messages.length > 0 && (
+            <TouchableOpacity onPress={startNewChat} style={styles.newChatBtn} activeOpacity={0.7}>
+              <Text style={styles.newChatText}>+ New</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {isOffline && (
@@ -636,6 +665,10 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 22, fontWeight: '700', color: Colors.teal, letterSpacing: -0.3 },
   headerSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 1 },
+  headerRight: { alignItems: 'flex-end', gap: 8 },
+  proBadge: { fontSize: 12, color: Colors.teal, fontWeight: '700' },
+  remainingBadge: { fontSize: 11, color: Colors.grayDark, fontWeight: '500' },
+  remainingLow: { color: Colors.error },
   newChatBtn: {
     paddingHorizontal: 12,
     paddingVertical: 5,
