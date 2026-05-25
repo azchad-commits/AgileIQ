@@ -211,3 +211,41 @@ export async function deleteFavorite(id: string): Promise<void> {
   const list = await getFavorites();
   await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(list.filter(f => f.id !== id)));
 }
+
+// ── Streak ────────────────────────────────────────────────────────────────────
+
+const STREAK_KEY = 'daily_streak';
+
+interface StreakData {
+  lastDate: string;
+  count: number;
+}
+
+export async function getStreak(): Promise<number> {
+  const raw = await AsyncStorage.getItem(STREAK_KEY);
+  if (!raw) return 0;
+  const data: StreakData = JSON.parse(raw);
+  const t = today();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yStr = yesterday.toISOString().split('T')[0];
+  if (data.lastDate === t || data.lastDate === yStr) return data.count;
+  return 0;
+}
+
+export async function updateStreak(): Promise<number> {
+  const t = today();
+  const raw = await AsyncStorage.getItem(STREAK_KEY);
+  if (!raw) {
+    await AsyncStorage.setItem(STREAK_KEY, JSON.stringify({ lastDate: t, count: 1 }));
+    return 1;
+  }
+  const data: StreakData = JSON.parse(raw);
+  if (data.lastDate === t) return data.count;
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yStr = yesterday.toISOString().split('T')[0];
+  const newCount = data.lastDate === yStr ? data.count + 1 : 1;
+  await AsyncStorage.setItem(STREAK_KEY, JSON.stringify({ lastDate: t, count: newCount }));
+  return newCount;
+}

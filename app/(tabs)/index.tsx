@@ -34,10 +34,13 @@ import {
   getIsPro,
   checkAndIncrementDailyCount,
   getResponseStyle,
+  getStreak,
+  updateStreak,
   FREE_TIER_LIMIT,
   PRO_TIER_LIMIT,
   type Favorite,
   type ResponseStyle,
+  type UserProfile,
 } from '../../services/storage';
 import { friendlyApiError, isNetworkError } from '../../services/apiErrors';
 
@@ -72,12 +75,45 @@ function promptAppRating() {
   );
 }
 
-const SUGGESTIONS = [
+const DEFAULT_SUGGESTIONS = [
   'How do I run an effective Sprint Retrospective?',
   'What are the 8 stances of a Scrum Master?',
   'How should we handle technical debt in the backlog?',
   "What's the difference between a Product Owner and a Project Manager?",
 ];
+
+const ROLE_SUGGESTIONS: Record<string, string[]> = {
+  'Scrum Master': [
+    'How do I handle a team that skips the Daily Scrum?',
+    'My team has low psychological safety. Where do I start?',
+    'How do I coach without giving the answer?',
+    'What does removing impediments actually look like?',
+  ],
+  'Agile Coach': [
+    'What coaching stances should I shift between?',
+    'How do I coach a PO who keeps changing priorities mid-sprint?',
+    'What does a healthy agile transformation look like at scale?',
+    'How do I measure the impact of my coaching?',
+  ],
+  'Product Owner': [
+    'How do I write acceptance criteria that actually close conversations?',
+    'What makes a healthy Product Backlog?',
+    'How do I say no to stakeholders without damaging relationships?',
+    'How do I articulate a clear and compelling Product Goal?',
+  ],
+  'Developer': [
+    'What is the Definition of Done and why does it matter?',
+    'How do we manage technical debt without ignoring features?',
+    'How do I estimate story points with more confidence?',
+    'What does real Developer ownership in Scrum look like?',
+  ],
+  'Manager': [
+    'How do I support self-organizing teams without micromanaging?',
+    'What Agile metrics should I actually track?',
+    'How do I set stakeholder expectations in Scrum?',
+    'What does servant leadership look like day-to-day?',
+  ],
+};
 
 function getGreeting(): string {
   const h = new Date().getHours();
@@ -108,6 +144,8 @@ export default function ChatScreen() {
   const [isPro, setIsPro] = useState(false);
   const [isByok, setIsByok] = useState(false);
   const [remaining, setRemaining] = useState(FREE_TIER_LIMIT);
+  const [streak, setStreak] = useState(0);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   const conversationId = useRef(Date.now().toString());
   const conversationTitleRef = useRef('');
@@ -128,13 +166,17 @@ export default function ChatScreen() {
   inputRef.current = input;
 
   const refreshTierStatus = useCallback(async () => {
-    const [byokKey, pro, style] = await Promise.all([getApiKey(), getIsPro(), getResponseStyle()]);
+    const [byokKey, pro, style, prof, streakCount] = await Promise.all([
+      getApiKey(), getIsPro(), getResponseStyle(), getUserProfile(), getStreak(),
+    ]);
     byokKeyRef.current = byokKey;
     isProRef.current = pro;
     responseStyleRef.current = style;
     const byok = !!byokKey;
     setIsByok(byok);
     setIsPro(pro);
+    setProfile(prof);
+    setStreak(streakCount);
     if (!byok) setRemaining(await getRemainingQuestions(pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT));
   }, []);
 
@@ -331,7 +373,11 @@ export default function ChatScreen() {
       });
 
       if (nextMessages.filter(m => m.role === 'user').length === 1) {
-        const count = await incrementAndGetConversationCount();
+        const [count, newStreak] = await Promise.all([
+          incrementAndGetConversationCount(),
+          updateStreak(),
+        ]);
+        setStreak(newStreak);
         if (RATING_MILESTONES.has(count)) {
           setTimeout(promptAppRating, 1200);
         }
@@ -401,13 +447,18 @@ export default function ChatScreen() {
           <Text style={styles.headerSub}>AI Agile Coach</Text>
         </View>
         <View style={styles.headerRight}>
-          {(isByok || isPro) ? (
-            <Text style={styles.proBadge}>Pro ✦</Text>
-          ) : (
-            <Text style={[styles.remainingBadge, remaining <= 1 && styles.remainingLow]}>
-              {remaining}/{FREE_TIER_LIMIT} free today
-            </Text>
-          )}
+          <View style={styles.headerBadgeRow}>
+            {(isByok || isPro) ? (
+              <Text style={styles.proBadge}>Pro ✦</Text>
+            ) : (
+              <Text style={[styles.remainingBadge, remaining <= 1 && styles.remainingLow]}>
+                {remaining}/{FREE_TIER_LIMIT} free today
+              </Text>
+            )}
+            {streak >= 2 && (
+              <Text style={styles.streakBadge}>🔥 {streak}</Text>
+            )}
+          </View>
           {messages.length > 0 && (
             <TouchableOpacity onPress={startNewChat} style={styles.newChatBtn} activeOpacity={0.7}>
               <Text style={styles.newChatText}>+ New</Text>
@@ -434,7 +485,7 @@ export default function ChatScreen() {
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         onScroll={handleScroll}
         scrollEventThrottle={16}
-        ListEmptyComponent={<EmptyState onSuggestion={s => send(s)} />}
+        ListEmptyComponent={<EmptyState onSuggestion={s => send(s)} profile={profile} />}
         ListFooterComponent={
           !loading && messages.length > 0
             ? <FollowUpChips messages={messages} onSelect={send} />
@@ -628,14 +679,20 @@ function MessageBubble({
   );
 }
 
-function EmptyState({ onSuggestion }: { onSuggestion: (text: string) => void }) {
+function EmptyState({ onSuggestion, profile }: { onSuggestion: (text: string) => void; profile: UserProfile | null }) {
+  const roleSuggestions = profile?.role ? ROLE_SUGGESTIONS[profile.role] : null;
+  const suggestions = roleSuggestions ?? DEFAULT_SUGGESTIONS;
+  const greeting = profile?.role
+    ? `${getGreeting()}, ${profile.role}`
+    : getGreeting();
+
   return (
     <View style={styles.empty}>
-      <Text style={styles.emptyTitle}>{getGreeting()}</Text>
+      <Text style={styles.emptyTitle}>{greeting}</Text>
       <Text style={styles.emptySub}>
         I'm AgileIQ. Ask me anything about Scrum, SAFe, coaching, sprints, and more.
       </Text>
-      {SUGGESTIONS.map(s => (
+      {suggestions.map(s => (
         <TouchableOpacity
           key={s}
           style={styles.suggestion}
@@ -720,6 +777,8 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 22, fontWeight: '700', color: Colors.teal, letterSpacing: -0.3 },
   headerSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 1 },
   headerRight: { alignItems: 'flex-end', gap: 8 },
+  headerBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  streakBadge: { fontSize: 12, color: Colors.text, fontWeight: '600' },
   proBadge: { fontSize: 12, color: Colors.teal, fontWeight: '700' },
   remainingBadge: { fontSize: 11, color: Colors.grayDark, fontWeight: '500' },
   remainingLow: { color: Colors.error },
