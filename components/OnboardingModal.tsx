@@ -5,6 +5,7 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
@@ -62,7 +63,15 @@ export function OnboardingModal({ visible, onDismiss }: { visible: boolean; onDi
     <Modal visible={visible} animationType="fade" transparent={false} statusBarTranslucent>
       <SafeAreaView style={ob.container}>
         <View style={ob.content}>
-          <Text style={ob.icon}>{currentPage.icon}</Text>
+          {page === 0 ? (
+            <Image
+              source={require('../assets/icon.png')}
+              style={ob.logoImg}
+              resizeMode="cover"
+            />
+          ) : (
+            <Text style={ob.icon}>{currentPage.icon}</Text>
+          )}
           <Text style={ob.title}>{currentPage.title}</Text>
           {currentPage.isProfile ? (
             <View style={ob.profileWrap}>
@@ -133,6 +142,7 @@ const ob = StyleSheet.create({
     paddingBottom: 24,
   },
   icon: { fontSize: 72, marginBottom: 28 },
+  logoImg: { width: 96, height: 96, borderRadius: 22, marginBottom: 28 },
   title: {
     fontSize: 26,
     fontWeight: '700',

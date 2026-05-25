@@ -105,6 +105,32 @@ const TOPICS: Topic[] = [
       'What is a deployment pipeline and how should we structure ours?',
     ],
   },
+  {
+    title: 'Product Management',
+    emoji: '🗺️',
+    color: '#A855F7',
+    prompts: [
+      'How do I write a compelling product vision statement?',
+      'What is the difference between an outcome roadmap and a feature roadmap?',
+      'How do OKRs connect to sprint goals in an Agile team?',
+      'How should a Product Owner prioritize the backlog using RICE scoring?',
+      'What makes a great product strategy in an Agile context?',
+      'How do I run a good product discovery session with my team?',
+      'What Agile metrics matter most to a Product Owner?',
+    ],
+  },
+  {
+    title: 'Stakeholder Management',
+    emoji: '🤝',
+    color: '#EF4444',
+    prompts: [
+      'How do I manage a stakeholder who keeps adding scope mid-sprint?',
+      'What is the best way to communicate sprint progress to executives?',
+      'How do I build a stakeholder engagement plan for an Agile program?',
+      'How should I say no to a stakeholder without damaging the relationship?',
+      'What does a good Sprint Review look like for external stakeholders?',
+    ],
+  },
 ];
 
 export default function TopicsScreen() {

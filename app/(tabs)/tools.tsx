@@ -42,6 +42,15 @@ const SPRINT_CONCERNS = [
   'Dependencies',
 ];
 
+// ── Product Management constants ──────────────────────────────────────────────
+const OKR_TIMEFRAMES = ['This Quarter', 'Next Quarter', 'Half-Year', 'Annual'];
+const OKR_LEVELS = ['Individual', 'Team', 'Department', 'Company'];
+const PRIORITY_FRAMEWORKS = ['RICE', 'MoSCoW', 'Kano', 'Weighted Scoring'];
+const STAKEHOLDER_AUDIENCES = ['Executive / VP', 'Board', 'Engineering', 'Sales & Marketing', 'All-Hands'];
+const ROADMAP_HORIZONS = ['3 months', '6 months', '12 months', '18 months'];
+const ROADMAP_THEMES = ['Feature-based', 'Outcome-based', 'Problem-based', 'Technology'];
+const RESEARCH_SOURCES = ['User interviews', 'NPS / survey data', 'Support tickets', 'Usage analytics', 'Sales calls'];
+
 const RETRO_FORMATS = ['Start/Stop/Continue', '4Ls', 'Mad/Sad/Glad', 'Rose/Thorn/Bud', 'ORID'];
 const RETRO_TIMES = ['30 min', '45 min', '60 min', '90 min'];
 const STORY_COUNTS = ['3', '5', '8', '10'];
@@ -665,6 +674,326 @@ function PIPlanningSheet({ visible, onClose }: { visible: boolean; onClose: () =
   );
 }
 
+// ── OKR Builder ───────────────────────────────────────────────────────────────
+
+function OKRBuilderSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [objective, setObjective] = useState('');
+  const [keyResults, setKeyResults] = useState('');
+  const [timeframe, setTimeframe] = useState('This Quarter');
+  const [level, setLevel] = useState('Team');
+
+  const handleGenerate = () => {
+    if (!objective.trim()) return;
+    const parts = [
+      `Help me build strong OKRs for our team.\n\n**Objective:** ${objective.trim()}`,
+      keyResults.trim() ? `\n\n**Draft Key Results (to improve):** ${keyResults.trim()}` : '',
+      `\n**Timeframe:** ${timeframe}`,
+      `\n**Level:** ${level}`,
+      `\n\nPlease provide:\n1. Refine or rewrite the Objective so it is inspiring and qualitative\n2. Write 3–4 strong Key Results that are measurable, outcome-focused, and time-bound\n3. For each Key Result: suggest a leading indicator and how to track it\n4. Flag any Key Results that sound like tasks rather than outcomes and fix them\n5. Give 2–3 tips for keeping the team aligned to these OKRs throughout the ${timeframe.toLowerCase()}`,
+    ];
+    reset();
+    onClose();
+    setTimeout(() => {
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+    }, 300);
+  };
+
+  const reset = () => { setObjective(''); setKeyResults(''); setTimeframe('This Quarter'); setLevel('Team'); };
+
+  return (
+    <Sheet visible={visible} onClose={() => { reset(); onClose(); }} title="🎯 OKR Builder">
+      <Text style={f.fieldLabel}>OBJECTIVE *</Text>
+      <TextInput
+        style={[f.textArea, { minHeight: 80 }]}
+        value={objective}
+        onChangeText={setObjective}
+        placeholder="What do you want to achieve this quarter?"
+        placeholderTextColor={Colors.grayDark}
+        multiline
+        maxLength={300}
+      />
+      <Text style={f.fieldLabel}>DRAFT KEY RESULTS (optional)</Text>
+      <TextInput
+        style={[f.textArea, { minHeight: 80 }]}
+        value={keyResults}
+        onChangeText={setKeyResults}
+        placeholder="Paste any draft KRs — AgileIQ will refine them…"
+        placeholderTextColor={Colors.grayDark}
+        multiline
+        maxLength={400}
+      />
+      <ChipGroup label="TIMEFRAME" options={OKR_TIMEFRAMES} selected={timeframe} onSelect={setTimeframe} />
+      <ChipGroup label="LEVEL" options={OKR_LEVELS} selected={level} onSelect={setLevel} />
+      <TouchableOpacity
+        style={[f.submitBtn, !objective.trim() && f.submitBtnDisabled]}
+        onPress={handleGenerate}
+        disabled={!objective.trim()}
+        activeOpacity={0.85}
+      >
+        <Text style={f.submitBtnText}>Build OKRs →</Text>
+      </TouchableOpacity>
+      <View style={{ height: 40 }} />
+    </Sheet>
+  );
+}
+
+// ── Feature Prioritization ────────────────────────────────────────────────────
+
+function FeaturePrioritizationSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [features, setFeatures] = useState('');
+  const [framework, setFramework] = useState('RICE');
+  const [context, setContext] = useState('');
+
+  const handleGenerate = () => {
+    if (!features.trim()) return;
+    const parts = [
+      `Help me prioritize these features using the **${framework}** framework.\n\n**Features to prioritize:**\n${features.trim()}`,
+      context.trim() ? `\n\n**Context / constraints:** ${context.trim()}` : '',
+      framework === 'RICE'
+        ? `\n\nFor each feature:\n1. Estimate Reach, Impact, Confidence, and Effort on a consistent scale\n2. Calculate the RICE score\n3. Rank the features by score\n4. Flag assumptions and risks in your estimates\n5. Recommend what to tackle first and why`
+        : framework === 'MoSCoW'
+        ? `\n\nFor each feature:\n1. Assign Must Have / Should Have / Could Have / Won't Have\n2. Explain the rationale for each classification\n3. Identify any Must Haves at risk of scope creep\n4. Suggest which Could Haves to cut first if pressed for time`
+        : framework === 'Kano'
+        ? `\n\nFor each feature:\n1. Classify as Basic Need / Performance / Excitement / Indifferent / Reverse\n2. Explain the Kano reasoning for each\n3. Highlight which Excitement features could be differentiators\n4. Recommend a prioritization order based on customer delight`
+        : `\n\nFor each feature:\n1. Score on Value (1–10), Effort (1–10), Risk (1–10), Strategic Fit (1–10)\n2. Provide a weighted composite score\n3. Rank the features\n4. Explain any trade-offs in the top items`,
+    ];
+    reset();
+    onClose();
+    setTimeout(() => {
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+    }, 300);
+  };
+
+  const reset = () => { setFeatures(''); setFramework('RICE'); setContext(''); };
+
+  return (
+    <Sheet visible={visible} onClose={() => { reset(); onClose(); }} title="⚖️ Feature Prioritization">
+      <Text style={f.fieldLabel}>FEATURES TO PRIORITIZE *</Text>
+      <TextInput
+        style={[f.textArea, { minHeight: 100 }]}
+        value={features}
+        onChangeText={setFeatures}
+        placeholder="List your features or user stories, one per line…"
+        placeholderTextColor={Colors.grayDark}
+        multiline
+        maxLength={600}
+      />
+      <ChipGroup label="FRAMEWORK" options={PRIORITY_FRAMEWORKS} selected={framework} onSelect={setFramework} />
+      <Text style={f.fieldLabel}>CONTEXT / CONSTRAINTS (optional)</Text>
+      <TextInput
+        style={f.input}
+        value={context}
+        onChangeText={setContext}
+        placeholder="e.g. Q3 launch, mobile-first, limited team bandwidth"
+        placeholderTextColor={Colors.grayDark}
+        maxLength={200}
+      />
+      <TouchableOpacity
+        style={[f.submitBtn, !features.trim() && f.submitBtnDisabled]}
+        onPress={handleGenerate}
+        disabled={!features.trim()}
+        activeOpacity={0.85}
+      >
+        <Text style={f.submitBtnText}>Prioritize Features →</Text>
+      </TouchableOpacity>
+      <View style={{ height: 40 }} />
+    </Sheet>
+  );
+}
+
+// ── Stakeholder Update ────────────────────────────────────────────────────────
+
+function StakeholderUpdateSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [progress, setProgress] = useState('');
+  const [audience, setAudience] = useState('Executive / VP');
+  const [highlights, setHighlights] = useState('');
+  const [risks, setRisks] = useState('');
+
+  const handleGenerate = () => {
+    if (!progress.trim()) return;
+    const parts = [
+      `Write a stakeholder product update for **${audience}** stakeholders.\n\n**Progress this period:** ${progress.trim()}`,
+      highlights.trim() ? `\n\n**Key wins / highlights:** ${highlights.trim()}` : '',
+      risks.trim() ? `\n\n**Risks or blockers to surface:** ${risks.trim()}` : '',
+      `\n\nPlease:\n1. Write a concise, clear narrative update tailored to the ${audience} audience\n2. Lead with outcomes and value, not just activity\n3. Summarize the top 3 wins in bullet form\n4. Address risks with a recommended action or owner for each\n5. Close with the key focus for the next period\n6. Keep the tone appropriate: confident, transparent, and forward-looking`,
+    ];
+    reset();
+    onClose();
+    setTimeout(() => {
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+    }, 300);
+  };
+
+  const reset = () => { setProgress(''); setAudience('Executive / VP'); setHighlights(''); setRisks(''); };
+
+  return (
+    <Sheet visible={visible} onClose={() => { reset(); onClose(); }} title="📣 Stakeholder Update">
+      <ChipGroup label="AUDIENCE" options={STAKEHOLDER_AUDIENCES} selected={audience} onSelect={setAudience} />
+      <Text style={f.fieldLabel}>PROGRESS THIS PERIOD *</Text>
+      <TextInput
+        style={[f.textArea, { minHeight: 90 }]}
+        value={progress}
+        onChangeText={setProgress}
+        placeholder="What did the team ship, build, or learn?"
+        placeholderTextColor={Colors.grayDark}
+        multiline
+        maxLength={400}
+      />
+      <Text style={f.fieldLabel}>KEY WINS (optional)</Text>
+      <TextInput
+        style={f.input}
+        value={highlights}
+        onChangeText={setHighlights}
+        placeholder="e.g. Launched onboarding v2, reduced churn by 8%"
+        placeholderTextColor={Colors.grayDark}
+        maxLength={200}
+      />
+      <Text style={f.fieldLabel}>RISKS OR BLOCKERS (optional)</Text>
+      <TextInput
+        style={f.input}
+        value={risks}
+        onChangeText={setRisks}
+        placeholder="e.g. Vendor delay, unclear requirements from legal"
+        placeholderTextColor={Colors.grayDark}
+        maxLength={200}
+      />
+      <TouchableOpacity
+        style={[f.submitBtn, !progress.trim() && f.submitBtnDisabled]}
+        onPress={handleGenerate}
+        disabled={!progress.trim()}
+        activeOpacity={0.85}
+      >
+        <Text style={f.submitBtnText}>Generate Update →</Text>
+      </TouchableOpacity>
+      <View style={{ height: 40 }} />
+    </Sheet>
+  );
+}
+
+// ── Product Roadmap Builder ───────────────────────────────────────────────────
+
+function ProductRoadmapSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [vision, setVision] = useState('');
+  const [themes, setThemes] = useState('');
+  const [horizon, setHorizon] = useState('6 months');
+  const [roadmapType, setRoadmapType] = useState('Outcome-based');
+
+  const handleGenerate = () => {
+    if (!vision.trim()) return;
+    const parts = [
+      `Help me build a **${roadmapType} product roadmap** covering the next **${horizon}**.`,
+      `\n\n**Product vision / goal:** ${vision.trim()}`,
+      themes.trim() ? `\n\n**Themes or initiatives I'm considering:** ${themes.trim()}` : '',
+      `\n\nPlease:\n1. Structure a ${horizon} roadmap with clear Now / Next / Later (or monthly) horizons\n2. Organize it around ${roadmapType.replace('-based', '')} themes, not just features\n3. For each theme: describe the customer outcome, key bets, and success signal\n4. Highlight dependencies and sequencing logic\n5. Suggest 2–3 questions to validate each theme before committing\n6. Give advice on how to present this roadmap to stakeholders without over-committing`,
+    ];
+    reset();
+    onClose();
+    setTimeout(() => {
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+    }, 300);
+  };
+
+  const reset = () => { setVision(''); setThemes(''); setHorizon('6 months'); setRoadmapType('Outcome-based'); };
+
+  return (
+    <Sheet visible={visible} onClose={() => { reset(); onClose(); }} title="🗺️ Roadmap Builder">
+      <Text style={f.fieldLabel}>PRODUCT VISION / GOAL *</Text>
+      <TextInput
+        style={[f.textArea, { minHeight: 80 }]}
+        value={vision}
+        onChangeText={setVision}
+        placeholder="What problem are you solving and for whom?"
+        placeholderTextColor={Colors.grayDark}
+        multiline
+        maxLength={300}
+      />
+      <Text style={f.fieldLabel}>THEMES OR INITIATIVES (optional)</Text>
+      <TextInput
+        style={f.textArea}
+        value={themes}
+        onChangeText={setThemes}
+        placeholder="e.g. Mobile experience, Onboarding, Enterprise compliance…"
+        placeholderTextColor={Colors.grayDark}
+        multiline
+        maxLength={300}
+      />
+      <ChipGroup label="ROADMAP TYPE" options={ROADMAP_THEMES} selected={roadmapType} onSelect={setRoadmapType} />
+      <ChipGroup label="HORIZON" options={ROADMAP_HORIZONS} selected={horizon} onSelect={setHorizon} />
+      <TouchableOpacity
+        style={[f.submitBtn, !vision.trim() && f.submitBtnDisabled]}
+        onPress={handleGenerate}
+        disabled={!vision.trim()}
+        activeOpacity={0.85}
+      >
+        <Text style={f.submitBtnText}>Build Roadmap →</Text>
+      </TouchableOpacity>
+      <View style={{ height: 40 }} />
+    </Sheet>
+  );
+}
+
+// ── Research Synthesis ────────────────────────────────────────────────────────
+
+function ResearchSynthesisSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [findings, setFindings] = useState('');
+  const [sources, setSources] = useState<string[]>([]);
+  const [question, setQuestion] = useState('');
+
+  const toggleSource = (v: string) =>
+    setSources(prev => prev.includes(v) ? prev.filter(s => s !== v) : [...prev, v]);
+
+  const handleGenerate = () => {
+    if (!findings.trim()) return;
+    const sourceLine = sources.length > 0 ? `\n\n**Sources:** ${sources.join(', ')}` : '';
+    const questionLine = question.trim() ? `\n\n**Research question I'm trying to answer:** ${question.trim()}` : '';
+    const parts = [
+      `Help me synthesize product research findings into actionable insights.\n\n**Raw findings / data:**\n${findings.trim()}${sourceLine}${questionLine}`,
+      `\n\nPlease:\n1. Identify the top 3–5 themes or patterns across the findings\n2. For each theme: summarize evidence, assess signal strength (strong / weak / mixed), and state the implication for the product\n3. Surface any tensions or contradictions in the data\n4. Recommend 2–3 specific product or process actions based on the insights\n5. Suggest follow-up research questions to sharpen understanding\n6. Note any gaps or biases in the data that might skew conclusions`,
+    ];
+    reset();
+    onClose();
+    setTimeout(() => {
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+    }, 300);
+  };
+
+  const reset = () => { setFindings(''); setSources([]); setQuestion(''); };
+
+  return (
+    <Sheet visible={visible} onClose={() => { reset(); onClose(); }} title="🔬 Research Synthesis">
+      <Text style={f.fieldLabel}>RESEARCH FINDINGS *</Text>
+      <TextInput
+        style={[f.textArea, { minHeight: 120 }]}
+        value={findings}
+        onChangeText={setFindings}
+        placeholder="Paste quotes, survey results, key observations, or data points…"
+        placeholderTextColor={Colors.grayDark}
+        multiline
+        maxLength={800}
+      />
+      <Text style={f.fieldLabel}>RESEARCH QUESTION (optional)</Text>
+      <TextInput
+        style={f.input}
+        value={question}
+        onChangeText={setQuestion}
+        placeholder="e.g. Why do users abandon onboarding at step 3?"
+        placeholderTextColor={Colors.grayDark}
+        maxLength={200}
+      />
+      <ChipGroup label="DATA SOURCES (pick any)" options={RESEARCH_SOURCES} selected={sources} onSelect={toggleSource} multi />
+      <TouchableOpacity
+        style={[f.submitBtn, !findings.trim() && f.submitBtnDisabled]}
+        onPress={handleGenerate}
+        disabled={!findings.trim()}
+        activeOpacity={0.85}
+      >
+        <Text style={f.submitBtnText}>Synthesize Findings →</Text>
+      </TouchableOpacity>
+      <View style={{ height: 40 }} />
+    </Sheet>
+  );
+}
+
 // ── Tool card ─────────────────────────────────────────────────────────────────
 
 function ToolCard({
@@ -712,7 +1041,10 @@ const tc = StyleSheet.create({
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function ToolsScreen() {
-  const [activeSheet, setActiveSheet] = useState<'sprint' | 'retro' | 'userstory' | 'standup' | 'refinement' | 'health' | 'pi' | null>(null);
+  const [activeSheet, setActiveSheet] = useState<
+    'sprint' | 'retro' | 'userstory' | 'standup' | 'refinement' | 'health' | 'pi' |
+    'okr' | 'prioritize' | 'stakeholder' | 'roadmap' | 'research' | null
+  >(null);
 
   const startCoachingSession = useCallback(() => {
     const prompt =
@@ -777,9 +1109,41 @@ export default function ToolsScreen() {
           onPress={() => setActiveSheet('pi')}
         />
 
-        <Text style={[styles.groupLabel, { marginTop: 24 }]}>1-ON-1 COACHING</Text>
+        <Text style={[styles.groupLabel, { marginTop: 24 }]}>PRODUCT MANAGEMENT</Text>
         <ToolCard
           icon="🎯"
+          title="OKR Builder"
+          description="Define compelling Objectives and measurable Key Results with AI guidance"
+          onPress={() => setActiveSheet('okr')}
+        />
+        <ToolCard
+          icon="⚖️"
+          title="Feature Prioritization"
+          description="Score your backlog with RICE, MoSCoW, Kano, or weighted frameworks"
+          onPress={() => setActiveSheet('prioritize')}
+        />
+        <ToolCard
+          icon="📣"
+          title="Stakeholder Update"
+          description="Generate clear, outcome-led product updates for any audience"
+          onPress={() => setActiveSheet('stakeholder')}
+        />
+        <ToolCard
+          icon="🗺️"
+          title="Roadmap Builder"
+          description="Shape a product roadmap narrative with outcome themes and sequencing logic"
+          onPress={() => setActiveSheet('roadmap')}
+        />
+        <ToolCard
+          icon="🔬"
+          title="Research Synthesis"
+          description="Turn raw user feedback and data into patterns, insights, and product actions"
+          onPress={() => setActiveSheet('research')}
+        />
+
+        <Text style={[styles.groupLabel, { marginTop: 24 }]}>1-ON-1 COACHING</Text>
+        <ToolCard
+          icon="🧑‍💼"
           title="Coaching Session"
           description="AgileIQ asks YOU questions first, then coaches you through your toughest challenge"
           onPress={startCoachingSession}
@@ -803,6 +1167,11 @@ export default function ToolsScreen() {
       <BacklogRefinementSheet visible={activeSheet === 'refinement'} onClose={() => setActiveSheet(null)} />
       <TeamHealthSheet visible={activeSheet === 'health'} onClose={() => setActiveSheet(null)} />
       <PIPlanningSheet visible={activeSheet === 'pi'} onClose={() => setActiveSheet(null)} />
+      <OKRBuilderSheet visible={activeSheet === 'okr'} onClose={() => setActiveSheet(null)} />
+      <FeaturePrioritizationSheet visible={activeSheet === 'prioritize'} onClose={() => setActiveSheet(null)} />
+      <StakeholderUpdateSheet visible={activeSheet === 'stakeholder'} onClose={() => setActiveSheet(null)} />
+      <ProductRoadmapSheet visible={activeSheet === 'roadmap'} onClose={() => setActiveSheet(null)} />
+      <ResearchSynthesisSheet visible={activeSheet === 'research'} onClose={() => setActiveSheet(null)} />
     </SafeAreaView>
   );
 }

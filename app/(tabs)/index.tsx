@@ -12,6 +12,7 @@ import {
   Alert,
   Linking,
   Share,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -449,9 +450,16 @@ export default function ChatScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>AgileIQ</Text>
-          <Text style={styles.headerSub}>AI Agile Coach</Text>
+        <View style={styles.headerLeft}>
+          <Image
+            source={require('../../assets/icon.png')}
+            style={styles.headerLogo}
+            resizeMode="cover"
+          />
+          <View>
+            <Text style={styles.headerTitle}>AgileIQ</Text>
+            <Text style={styles.headerSub}>AI Agile Coach</Text>
+          </View>
         </View>
         <View style={styles.headerRight}>
           <View style={styles.headerBadgeRow}>
@@ -709,6 +717,11 @@ function EmptyState({ onSuggestion, profile }: { onSuggestion: (text: string) =>
 
   return (
     <View style={styles.empty}>
+      <Image
+        source={require('../../assets/icon.png')}
+        style={styles.emptyLogo}
+        resizeMode="cover"
+      />
       <Text style={styles.emptyTitle}>{greeting}</Text>
       <Text style={styles.emptySub}>
         I'm AgileIQ. Ask me anything about Scrum, SAFe, coaching, sprints, and more.
@@ -792,10 +805,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerLogo: { width: 38, height: 38, borderRadius: 9 },
   headerTitle: { fontSize: 22, fontWeight: '700', color: Colors.teal, letterSpacing: -0.3 },
   headerSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 1 },
   headerRight: { alignItems: 'flex-end', gap: 8 },
@@ -943,7 +958,8 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   scrollBtnIcon: { fontSize: 18, color: Colors.teal, fontWeight: '700', marginTop: -1 },
-  empty: { flex: 1, paddingHorizontal: 24, paddingTop: 48, alignItems: 'center' },
+  empty: { flex: 1, paddingHorizontal: 24, paddingTop: 32, alignItems: 'center' },
+  emptyLogo: { width: 76, height: 76, borderRadius: 18, marginBottom: 20 },
   emptyTitle: { fontSize: 26, fontWeight: '700', color: Colors.text, textAlign: 'center', marginBottom: 12 },
   emptySub: {
     fontSize: 16,
