@@ -86,6 +86,12 @@ export default function AnalyzeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [savedConversationId, setSavedConversationId] = useState<string | null>(null);
   const [showResultView, setShowResultView] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 1500);
+  }, []);
 
   const reset = useCallback(() => {
     setImage(null);
@@ -94,6 +100,7 @@ export default function AnalyzeScreen() {
     setError(null);
     setSavedConversationId(null);
     setShowResultView(false);
+    setToast(null);
   }, []);
 
   const handlePick = useCallback(async (source: 'library' | 'camera') => {
@@ -187,10 +194,10 @@ export default function AnalyzeScreen() {
 
   const handleCopyResult = useCallback(async () => {
     if (!result) return;
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await Clipboard.setStringAsync(result);
-    Alert.alert('Copied', 'Analysis copied to clipboard.');
-  }, [result]);
+    showToast('Copied');
+  }, [result, showToast]);
 
   // ── Result phase ─────────────────────────────────────────────
   if (showResultView) {
@@ -225,7 +232,11 @@ export default function AnalyzeScreen() {
               <Markdown style={markdownStyles}>{result ?? ''}</Markdown>
             </View>
           </TouchableOpacity>
-          <Text style={styles.copyHint}>Long-press to copy</Text>
+          <View style={styles.resultActions}>
+            <TouchableOpacity onPress={handleCopyResult} style={[styles.resultAction, styles.resultActionCopy]} activeOpacity={0.7}>
+              <Text style={[styles.resultActionText, styles.resultActionTextCopy]}>⎘ Copy</Text>
+            </TouchableOpacity>
+          </View>
           {savedConversationId && (
             <TouchableOpacity
               style={styles.discussBtn}
@@ -265,6 +276,13 @@ export default function AnalyzeScreen() {
 
           <View style={styles.bottomPad} />
         </ScrollView>
+        {!!toast && (
+          <View style={styles.toastWrapper} pointerEvents="none">
+            <View style={styles.toastInner}>
+              <Text style={styles.toastText}>{toast}</Text>
+            </View>
+          </View>
+        )}
       </SafeAreaView>
     );
   }
@@ -587,12 +605,21 @@ const styles = StyleSheet.create({
   reAnalyzeSectionLabel: {
     marginTop: 24,
   },
-  copyHint: {
-    textAlign: 'center',
-    fontSize: 12,
-    color: Colors.grayDark,
-    marginTop: 12,
+  resultActions: { flexDirection: 'row', gap: 6, marginTop: 10 },
+  resultAction: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
+  resultActionCopy: { borderColor: Colors.teal, backgroundColor: Colors.tealDim },
+  resultActionText: { fontSize: 12, color: Colors.textSecondary, fontWeight: '500' },
+  resultActionTextCopy: { color: Colors.tealLight, fontWeight: '600' },
+  toastWrapper: { position: 'absolute', left: 0, right: 0, bottom: 80, alignItems: 'center', zIndex: 100 },
+  toastInner: { backgroundColor: 'rgba(0,0,0,0.75)', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 24 },
+  toastText: { color: Colors.white, fontSize: 14, fontWeight: '500' },
   discussBtn: {
     marginTop: 16,
     backgroundColor: Colors.surface,

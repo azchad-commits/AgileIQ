@@ -5,7 +5,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
@@ -64,11 +63,10 @@ export function OnboardingModal({ visible, onDismiss }: { visible: boolean; onDi
       <SafeAreaView style={ob.container}>
         <View style={ob.content}>
           {page === 0 ? (
-            <Image
-              source={require('../assets/logo.png')}
-              style={ob.logoImg}
-              resizeMode="contain"
-            />
+            <View style={ob.wordmarkWrap}>
+              <Text style={ob.wordmarkMain}>Agile<Text style={ob.wordmarkAccent}>IQ</Text></Text>
+              <Text style={ob.wordmarkSub}>AI Agile Coach</Text>
+            </View>
           ) : (
             <Text style={ob.icon}>{currentPage.icon}</Text>
           )}
@@ -142,7 +140,10 @@ const ob = StyleSheet.create({
     paddingBottom: 24,
   },
   icon: { fontSize: 72, marginBottom: 28 },
-  logoImg: { width: 280, height: 152, borderRadius: 20, marginBottom: 28 },
+  wordmarkWrap: { alignItems: 'center', marginBottom: 28 },
+  wordmarkMain: { fontSize: 48, fontWeight: '900', color: Colors.white, letterSpacing: -1 },
+  wordmarkAccent: { color: Colors.teal },
+  wordmarkSub: { fontSize: 13, color: Colors.grayDark, letterSpacing: 0.5, marginTop: 4 },
   title: {
     fontSize: 26,
     fontWeight: '700',

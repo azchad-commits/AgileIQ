@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -54,6 +55,32 @@ const RESEARCH_SOURCES = ['User interviews', 'NPS / survey data', 'Support ticke
 const RETRO_FORMATS = ['Start/Stop/Continue', '4Ls', 'Mad/Sad/Glad', 'Rose/Thorn/Bud', 'ORID'];
 const RETRO_TIMES = ['30 min', '45 min', '60 min', '90 min'];
 const STORY_COUNTS = ['3', '5', '8', '10'];
+
+// ── Ceremony Timer constants ──────────────────────────────────────────────────
+const CEREMONY_PRESETS = [
+  { name: 'Daily Standup', minutes: 15, emoji: '☀️' },
+  { name: 'Sprint Planning', minutes: 120, emoji: '🏃' },
+  { name: 'Sprint Review', minutes: 60, emoji: '📋' },
+  { name: 'Retrospective', minutes: 60, emoji: '🔄' },
+  { name: 'Refinement', minutes: 90, emoji: '✨' },
+  { name: 'PI Planning', minutes: 480, emoji: '🗓️' },
+];
+
+// ── Cert Prep constants ───────────────────────────────────────────────────────
+const CERTS = [
+  { id: 'psm1', name: 'PSM I', full: 'Professional Scrum Master I', org: 'Scrum.org' },
+  { id: 'psm2', name: 'PSM II', full: 'Professional Scrum Master II', org: 'Scrum.org' },
+  { id: 'pspo1', name: 'PSPO I', full: 'Professional Scrum Product Owner I', org: 'Scrum.org' },
+  { id: 'safe-sa', name: 'SAFe SA', full: 'SAFe Agilist', org: 'Scaled Agile' },
+  { id: 'csm', name: 'CSM', full: 'Certified ScrumMaster', org: 'Scrum Alliance' },
+  { id: 'cspo', name: 'CSPO', full: 'Certified Scrum Product Owner', org: 'Scrum Alliance' },
+];
+const STUDY_MODES = [
+  { id: 'practice', label: 'Practice Questions', desc: '5 realistic exam-style questions with explanations' },
+  { id: 'concept', label: 'Concept Review', desc: 'Key topics and knowledge areas I must master' },
+  { id: 'weak', label: 'Weak Spots', desc: 'Quiz me on the most commonly failed areas' },
+  { id: 'mock', label: 'Mock Exam', desc: '10-question mock with scoring and detailed feedback' },
+];
 
 // ── Shared bottom sheet ───────────────────────────────────────────────────────
 
@@ -318,10 +345,11 @@ function SprintPlannerSheet({ visible, onClose }: { visible: boolean; onClose: (
       `\n\nPlease provide:\n1. Recommended sprint structure and capacity breakdown\n2. How to sequence work to achieve the sprint goal\n3. Specific coaching advice on our concerns\n4. 3–4 sharp questions to ask in sprint planning`,
     ];
     const prompt = parts.join('');
+    const chatTitle = `Sprint Plan: ${goal.trim().slice(0, 50)}`;
     reset();
     onClose();
     setTimeout(() => {
-      router.navigate({ pathname: '/', params: { prompt, t: Date.now().toString(), newChat: '1' } } as any);
+      router.navigate({ pathname: '/', params: { prompt, chatTitle, t: Date.now().toString(), newChat: '1' } } as any);
     }, 300);
   };
 
@@ -385,10 +413,11 @@ function RetroSheet({ visible, onClose }: { visible: boolean; onClose: () => voi
   const handleGenerate = () => {
     if (!format) return;
     const prompt = `Facilitate a **${format}** retrospective for our team of ${teamSize} people with ${timeBox} available.\n\nPlease:\n1. Briefly explain the ${format} format (2–3 sentences)\n2. Give 4–5 strong questions for each category that spark honest reflection\n3. Suggest a time allocation breakdown for ${timeBox}\n4. Give 2–3 tips for drawing out quieter team members\n5. Explain how to close the retro: turning insights into 1–2 committed action items`;
+    const chatTitle = `${format} Retrospective`;
     reset();
     onClose();
     setTimeout(() => {
-      router.navigate({ pathname: '/', params: { prompt, t: Date.now().toString(), newChat: '1' } } as any);
+      router.navigate({ pathname: '/', params: { prompt, chatTitle, t: Date.now().toString(), newChat: '1' } } as any);
     }, 300);
   };
 
@@ -436,10 +465,11 @@ function UserStorySheet({ visible, onClose }: { visible: boolean; onClose: () =>
       `\n\nPlease generate:\n1. ${count} well-formed user stories in "As a [persona], I want [goal], so that [benefit]" format\n2. 3–5 acceptance criteria for the most important story\n3. Flag any story that's too large and suggest how to split it\n4. Identify edge cases and dependencies worth capturing in the backlog`,
     ];
     const prompt = parts.join('');
+    const chatTitle = `User Stories: ${epic.trim().slice(0, 40)}`;
     reset();
     onClose();
     setTimeout(() => {
-      router.navigate({ pathname: '/', params: { prompt, t: Date.now().toString(), newChat: '1' } } as any);
+      router.navigate({ pathname: '/', params: { prompt, chatTitle, t: Date.now().toString(), newChat: '1' } } as any);
     }, 300);
   };
 
@@ -505,10 +535,11 @@ function DailyStandupSheet({ visible, onClose }: { visible: boolean; onClose: ()
       `\n**Team size:** ${teamSize}`,
       `\n\nPlease:\n1. Help me frame a clear, focused standup update\n2. Identify any hidden risks or dependencies in what I've shared\n3. Suggest how to raise any impediments effectively\n4. Give 1–2 coaching tips for running a tight, valuable Daily Scrum`,
     ];
+    const chatTitle = 'Daily Standup Prep';
     reset();
     onClose();
     setTimeout(() => {
-      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), chatTitle, t: Date.now().toString(), newChat: '1' } } as any);
     }, 300);
   };
 
@@ -554,10 +585,11 @@ function BacklogRefinementSheet({ visible, onClose }: { visible: boolean; onClos
       `\n**Team size:** ${teamSize}`,
       `\n\nFor each story please:\n1. Assess readiness (Definition of Ready check)\n2. Identify gaps in acceptance criteria\n3. Flag stories that need splitting and suggest how\n4. Estimate relative complexity (S/M/L/XL)\n5. Surface hidden dependencies or risks`,
     ];
+    const chatTitle = 'Backlog Refinement';
     reset();
     onClose();
     setTimeout(() => {
-      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), chatTitle, t: Date.now().toString(), newChat: '1' } } as any);
     }, 300);
   };
 
@@ -599,10 +631,11 @@ function TeamHealthSheet({ visible, onClose }: { visible: boolean; onClose: () =
       `\n\n**Focus areas:** ${selected.join(', ')}`,
       `\n\nPlease:\n1. For each area, provide 3 diagnostic questions the team should honestly answer\n2. Describe what healthy vs. unhealthy looks like for each\n3. Suggest one concrete improvement action per area\n4. Recommend how to run the health check session (format, timing, facilitation tips)`,
     ];
+    const chatTitle = 'Team Health Check';
     reset();
     onClose();
     setTimeout(() => {
-      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), chatTitle, t: Date.now().toString(), newChat: '1' } } as any);
     }, 300);
   };
 
@@ -646,10 +679,11 @@ function PIPlanningSheet({ visible, onClose }: { visible: boolean; onClose: () =
       risks.length > 0 ? `\n**Known risks:** ${risks.join(', ')}` : '',
       `\n\nPlease provide:\n1. Recommended PI Planning agenda and timing for ${teams} teams\n2. How to craft strong, measurable PI Objectives\n3. ROAM framework guidance for the identified risks\n4. Tips for the team breakout sessions\n5. How to run a successful System Demo and Inspect & Adapt`,
     ];
+    const chatTitle = `PI Planning: ${piGoal.trim().slice(0, 40)}`;
     reset();
     onClose();
     setTimeout(() => {
-      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), chatTitle, t: Date.now().toString(), newChat: '1' } } as any);
     }, 300);
   };
 
@@ -691,10 +725,11 @@ function OKRBuilderSheet({ visible, onClose }: { visible: boolean; onClose: () =
       `\n**Level:** ${level}`,
       `\n\nPlease provide:\n1. Refine or rewrite the Objective so it is inspiring and qualitative\n2. Write 3–4 strong Key Results that are measurable, outcome-focused, and time-bound\n3. For each Key Result: suggest a leading indicator and how to track it\n4. Flag any Key Results that sound like tasks rather than outcomes and fix them\n5. Give 2–3 tips for keeping the team aligned to these OKRs throughout the ${timeframe.toLowerCase()}`,
     ];
+    const chatTitle = `OKRs: ${objective.trim().slice(0, 40)}`;
     reset();
     onClose();
     setTimeout(() => {
-      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), chatTitle, t: Date.now().toString(), newChat: '1' } } as any);
     }, 300);
   };
 
@@ -757,10 +792,11 @@ function FeaturePrioritizationSheet({ visible, onClose }: { visible: boolean; on
         ? `\n\nFor each feature:\n1. Classify as Basic Need / Performance / Excitement / Indifferent / Reverse\n2. Explain the Kano reasoning for each\n3. Highlight which Excitement features could be differentiators\n4. Recommend a prioritization order based on customer delight`
         : `\n\nFor each feature:\n1. Score on Value (1–10), Effort (1–10), Risk (1–10), Strategic Fit (1–10)\n2. Provide a weighted composite score\n3. Rank the features\n4. Explain any trade-offs in the top items`,
     ];
+    const chatTitle = `${framework} Prioritization`;
     reset();
     onClose();
     setTimeout(() => {
-      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), chatTitle, t: Date.now().toString(), newChat: '1' } } as any);
     }, 300);
   };
 
@@ -817,10 +853,11 @@ function StakeholderUpdateSheet({ visible, onClose }: { visible: boolean; onClos
       risks.trim() ? `\n\n**Risks or blockers to surface:** ${risks.trim()}` : '',
       `\n\nPlease:\n1. Write a concise, clear narrative update tailored to the ${audience} audience\n2. Lead with outcomes and value, not just activity\n3. Summarize the top 3 wins in bullet form\n4. Address risks with a recommended action or owner for each\n5. Close with the key focus for the next period\n6. Keep the tone appropriate: confident, transparent, and forward-looking`,
     ];
+    const chatTitle = `${audience} Update`;
     reset();
     onClose();
     setTimeout(() => {
-      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), chatTitle, t: Date.now().toString(), newChat: '1' } } as any);
     }, 300);
   };
 
@@ -886,10 +923,11 @@ function ProductRoadmapSheet({ visible, onClose }: { visible: boolean; onClose: 
       themes.trim() ? `\n\n**Themes or initiatives I'm considering:** ${themes.trim()}` : '',
       `\n\nPlease:\n1. Structure a ${horizon} roadmap with clear Now / Next / Later (or monthly) horizons\n2. Organize it around ${roadmapType.replace('-based', '')} themes, not just features\n3. For each theme: describe the customer outcome, key bets, and success signal\n4. Highlight dependencies and sequencing logic\n5. Suggest 2–3 questions to validate each theme before committing\n6. Give advice on how to present this roadmap to stakeholders without over-committing`,
     ];
+    const chatTitle = `${roadmapType} Roadmap (${horizon})`;
     reset();
     onClose();
     setTimeout(() => {
-      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), chatTitle, t: Date.now().toString(), newChat: '1' } } as any);
     }, 300);
   };
 
@@ -950,10 +988,11 @@ function ResearchSynthesisSheet({ visible, onClose }: { visible: boolean; onClos
       `Help me synthesize product research findings into actionable insights.\n\n**Raw findings / data:**\n${findings.trim()}${sourceLine}${questionLine}`,
       `\n\nPlease:\n1. Identify the top 3–5 themes or patterns across the findings\n2. For each theme: summarize evidence, assess signal strength (strong / weak / mixed), and state the implication for the product\n3. Surface any tensions or contradictions in the data\n4. Recommend 2–3 specific product or process actions based on the insights\n5. Suggest follow-up research questions to sharpen understanding\n6. Note any gaps or biases in the data that might skew conclusions`,
     ];
+    const chatTitle = 'Research Synthesis';
     reset();
     onClose();
     setTimeout(() => {
-      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), chatTitle, t: Date.now().toString(), newChat: '1' } } as any);
     }, 300);
   };
 
@@ -993,6 +1032,278 @@ function ResearchSynthesisSheet({ visible, onClose }: { visible: boolean; onClos
     </Sheet>
   );
 }
+
+// ── Ceremony Timer ────────────────────────────────────────────────────────────
+
+function CeremonyTimerSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [preset, setPreset] = useState<string | null>(null);
+  const [customMins, setCustomMins] = useState('');
+  const [totalSecs, setTotalSecs] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [phase, setPhase] = useState<'setup' | 'running' | 'paused' | 'done'>('setup');
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearTimer = () => {
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+  };
+
+  useEffect(() => {
+    if (!visible) { clearTimer(); setPhase('setup'); setPreset(null); setCustomMins(''); setTimeLeft(0); setTotalSecs(0); }
+  }, [visible]);
+
+  const tick = useCallback(() => {
+    setTimeLeft(t => {
+      if (t <= 1) {
+        clearTimer();
+        setPhase('done');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert("Time's up!", 'The timebox has ended.', [{ text: 'OK' }]);
+        return 0;
+      }
+      return t - 1;
+    });
+  }, []);
+
+  const handleStart = () => {
+    const mins = preset
+      ? (CEREMONY_PRESETS.find(p => p.name === preset)?.minutes ?? 0)
+      : parseInt(customMins, 10);
+    if (!mins || mins <= 0) return;
+    const secs = mins * 60;
+    setTotalSecs(secs);
+    setTimeLeft(secs);
+    setPhase('running');
+    intervalRef.current = setInterval(tick, 1000);
+  };
+
+  const handlePause = () => { clearTimer(); setPhase('paused'); };
+
+  const handleResume = () => {
+    setPhase('running');
+    intervalRef.current = setInterval(tick, 1000);
+  };
+
+  const handleReset = () => { clearTimer(); setPhase('setup'); setTimeLeft(0); setTotalSecs(0); };
+
+  const fmt = (s: number) => {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return h > 0
+      ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+      : `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  };
+
+  const progress = totalSecs > 0 ? (totalSecs - timeLeft) / totalSecs : 0;
+  const isReady = !!(preset || (customMins.trim() && parseInt(customMins, 10) > 0));
+  const selectedPresetData = CEREMONY_PRESETS.find(p => p.name === preset);
+
+  return (
+    <Sheet visible={visible} onClose={() => { clearTimer(); onClose(); }} title="⏱️ Ceremony Timer">
+      {phase === 'setup' ? (
+        <>
+          <Text style={f.fieldLabel}>SELECT CEREMONY</Text>
+          <View style={tmr.presetGrid}>
+            {CEREMONY_PRESETS.map(p => (
+              <TouchableOpacity
+                key={p.name}
+                style={[tmr.presetCard, preset === p.name && tmr.presetCardActive]}
+                onPress={() => { Haptics.selectionAsync(); setPreset(prev => prev === p.name ? null : p.name); setCustomMins(''); }}
+                activeOpacity={0.75}
+              >
+                <Text style={tmr.presetEmoji}>{p.emoji}</Text>
+                <Text style={[tmr.presetName, preset === p.name && tmr.presetNameActive]} numberOfLines={2}>{p.name}</Text>
+                <Text style={[tmr.presetTime, preset === p.name && tmr.presetTimeActive]}>{p.minutes >= 60 ? `${p.minutes / 60}h` : `${p.minutes}m`}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={f.fieldLabel}>OR CUSTOM DURATION (minutes)</Text>
+          <TextInput
+            style={f.input}
+            value={customMins}
+            onChangeText={v => { setCustomMins(v); setPreset(null); }}
+            placeholder="e.g. 45"
+            placeholderTextColor={Colors.grayDark}
+            keyboardType="number-pad"
+            maxLength={4}
+          />
+          <TouchableOpacity
+            style={[f.submitBtn, !isReady && f.submitBtnDisabled]}
+            onPress={handleStart}
+            disabled={!isReady}
+            activeOpacity={0.85}
+          >
+            <Text style={f.submitBtnText}>Start Timer →</Text>
+          </TouchableOpacity>
+          <View style={{ height: 40 }} />
+        </>
+      ) : (
+        <View style={tmr.timerFace}>
+          {selectedPresetData && phase !== 'done' && (
+            <Text style={tmr.ceremonyLabel}>{selectedPresetData.emoji} {selectedPresetData.name}</Text>
+          )}
+          <Text style={[tmr.countdown, phase === 'done' && tmr.countdownDone]}>
+            {phase === 'done' ? "Time's up!" : fmt(timeLeft)}
+          </Text>
+          {phase !== 'done' && (
+            <View style={tmr.progressBar}>
+              <View style={[tmr.progressFill, { width: `${progress * 100}%` as any }]} />
+            </View>
+          )}
+          {phase !== 'done' && (
+            <Text style={tmr.timeRemaining}>
+              {fmt(timeLeft)} remaining of {fmt(totalSecs)}
+            </Text>
+          )}
+          <View style={tmr.controls}>
+            {phase === 'running' && (
+              <TouchableOpacity style={tmr.controlBtn} onPress={handlePause} activeOpacity={0.8}>
+                <Text style={tmr.controlBtnText}>⏸ Pause</Text>
+              </TouchableOpacity>
+            )}
+            {phase === 'paused' && (
+              <TouchableOpacity style={[tmr.controlBtn, tmr.controlBtnPrimary]} onPress={handleResume} activeOpacity={0.8}>
+                <Text style={[tmr.controlBtnText, tmr.controlBtnTextPrimary]}>▶ Resume</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={tmr.controlBtn} onPress={handleReset} activeOpacity={0.8}>
+              <Text style={tmr.controlBtnText}>↺ Reset</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </Sheet>
+  );
+}
+
+const tmr = StyleSheet.create({
+  presetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+  presetCard: {
+    width: '30.5%', padding: 12, borderRadius: 12,
+    backgroundColor: Colors.navyMid, borderWidth: 1, borderColor: Colors.border,
+    alignItems: 'center', gap: 4,
+  },
+  presetCardActive: { backgroundColor: Colors.tealDim, borderColor: Colors.teal },
+  presetEmoji: { fontSize: 22 },
+  presetName: { fontSize: 11, color: Colors.textSecondary, textAlign: 'center', fontWeight: '600' },
+  presetNameActive: { color: Colors.tealLight },
+  presetTime: { fontSize: 13, color: Colors.grayDark, fontWeight: '700' },
+  presetTimeActive: { color: Colors.teal },
+  timerFace: { alignItems: 'center', paddingVertical: 24, gap: 16 },
+  ceremonyLabel: { fontSize: 15, color: Colors.textSecondary, fontWeight: '600' },
+  countdown: { fontSize: 72, fontWeight: '800', color: Colors.text, letterSpacing: -2, fontVariant: ['tabular-nums'] as any },
+  countdownDone: { fontSize: 36, color: Colors.teal },
+  progressBar: { width: '100%', height: 6, backgroundColor: Colors.navyMid, borderRadius: 3, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: Colors.teal, borderRadius: 3 },
+  timeRemaining: { fontSize: 13, color: Colors.grayDark },
+  controls: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  controlBtn: {
+    paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12,
+    backgroundColor: Colors.navyMid, borderWidth: 1, borderColor: Colors.border,
+  },
+  controlBtnPrimary: { backgroundColor: Colors.tealDim, borderColor: Colors.teal },
+  controlBtnText: { fontSize: 15, color: Colors.textSecondary, fontWeight: '600' },
+  controlBtnTextPrimary: { color: Colors.tealLight },
+});
+
+// ── Cert Prep ─────────────────────────────────────────────────────────────────
+
+function CertPrepSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [cert, setCert] = useState('');
+  const [mode, setMode] = useState('practice');
+
+  const handleGenerate = () => {
+    if (!cert) return;
+    const certData = CERTS.find(c => c.id === cert)!;
+    const modeData = STUDY_MODES.find(m => m.id === mode)!;
+
+    const prompts: Record<string, string> = {
+      practice: `Generate 5 realistic ${certData.name} (${certData.full}) exam-style practice questions.\n\nFor each question:\n1. Write a multiple-choice question with 4 options (A–D)\n2. Mark the correct answer\n3. Explain WHY each option is correct or incorrect, referencing the Scrum Guide or ${certData.org} framework\n4. Note the knowledge area this question tests\n\nMake the questions progressively harder. Focus on scenario-based questions that test understanding, not memorization.`,
+      concept: `I'm studying for the ${certData.name} (${certData.full}) certification from ${certData.org}.\n\nPlease:\n1. List the 8–10 most important knowledge areas I must deeply understand to pass\n2. For each area: summarize the key concepts in 2–3 sentences\n3. Highlight the 3 most commonly misunderstood topics on this exam\n4. Recommend the top 3 resources or chapters to focus on\n5. Give me a 2-week study plan outline`,
+      weak: `Quiz me on the most commonly failed topics for the ${certData.name} exam.\n\nPlease:\n1. List the top 5 areas where candidates most often fail the ${certData.name}\n2. For each area: give me 2 tricky questions that candidates frequently get wrong\n3. Reveal the correct answer with a thorough explanation\n4. Give a coaching tip for how to think about this topic correctly on exam day`,
+      mock: `Run a 10-question mock ${certData.name} exam.\n\nFormat:\n- 10 scenario-based multiple-choice questions (A–D), numbered 1–10\n- Present ALL 10 questions first without answers\n- Then provide an answer key with full explanations for each\n- Score out of 10 and indicate which knowledge areas need more study\n- End with 3 targeted study recommendations based on the weak areas`,
+    };
+
+    const prompt = prompts[mode];
+    const chatTitle = `${certData.name} — ${modeData.label}`;
+    reset();
+    onClose();
+    setTimeout(() => {
+      router.navigate({ pathname: '/', params: { prompt, chatTitle, t: Date.now().toString(), newChat: '1' } } as any);
+    }, 300);
+  };
+
+  const reset = () => { setCert(''); setMode('practice'); };
+
+  return (
+    <Sheet visible={visible} onClose={() => { reset(); onClose(); }} title="🎓 Certification Prep">
+      <Text style={f.fieldLabel}>CERTIFICATION *</Text>
+      <View style={cert_s.certGrid}>
+        {CERTS.map(c => (
+          <TouchableOpacity
+            key={c.id}
+            style={[cert_s.certCard, cert === c.id && cert_s.certCardActive]}
+            onPress={() => { Haptics.selectionAsync(); setCert(prev => prev === c.id ? '' : c.id); }}
+            activeOpacity={0.75}
+          >
+            <Text style={[cert_s.certName, cert === c.id && cert_s.certNameActive]}>{c.name}</Text>
+            <Text style={[cert_s.certOrg, cert === c.id && cert_s.certOrgActive]}>{c.org}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Text style={f.fieldLabel}>STUDY MODE</Text>
+      {STUDY_MODES.map(m => (
+        <TouchableOpacity
+          key={m.id}
+          style={[cert_s.modeRow, mode === m.id && cert_s.modeRowActive]}
+          onPress={() => { Haptics.selectionAsync(); setMode(m.id); }}
+          activeOpacity={0.75}
+        >
+          <View style={cert_s.modeText}>
+            <Text style={[cert_s.modeLabel, mode === m.id && cert_s.modeLabelActive]}>{m.label}</Text>
+            <Text style={cert_s.modeDesc}>{m.desc}</Text>
+          </View>
+          {mode === m.id && <Text style={cert_s.modeCheck}>✓</Text>}
+        </TouchableOpacity>
+      ))}
+      <View style={{ height: 16 }} />
+      <TouchableOpacity
+        style={[f.submitBtn, !cert && f.submitBtnDisabled]}
+        onPress={handleGenerate}
+        disabled={!cert}
+        activeOpacity={0.85}
+      >
+        <Text style={f.submitBtnText}>Start Study Session →</Text>
+      </TouchableOpacity>
+      <View style={{ height: 40 }} />
+    </Sheet>
+  );
+}
+
+const cert_s = StyleSheet.create({
+  certGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+  certCard: {
+    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12,
+    backgroundColor: Colors.navyMid, borderWidth: 1, borderColor: Colors.border,
+    minWidth: '30%', alignItems: 'center',
+  },
+  certCardActive: { backgroundColor: Colors.tealDim, borderColor: Colors.teal },
+  certName: { fontSize: 14, fontWeight: '700', color: Colors.textSecondary },
+  certNameActive: { color: Colors.tealLight },
+  certOrg: { fontSize: 10, color: Colors.grayDark, marginTop: 2 },
+  certOrgActive: { color: Colors.teal },
+  modeRow: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: 14, borderRadius: 12, marginBottom: 8,
+    backgroundColor: Colors.navyMid, borderWidth: 1, borderColor: Colors.border,
+  },
+  modeRowActive: { backgroundColor: Colors.tealDim, borderColor: Colors.teal },
+  modeText: { flex: 1 },
+  modeLabel: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary, marginBottom: 2 },
+  modeLabelActive: { color: Colors.tealLight },
+  modeDesc: { fontSize: 12, color: Colors.grayDark, lineHeight: 17 },
+  modeCheck: { fontSize: 16, color: Colors.teal, fontWeight: '700', marginLeft: 8 },
+});
 
 // ── Tool card ─────────────────────────────────────────────────────────────────
 
@@ -1041,15 +1352,19 @@ const tc = StyleSheet.create({
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function ToolsScreen() {
+  const { width } = useWindowDimensions();
+  const wide = width >= 768;
+
   const [activeSheet, setActiveSheet] = useState<
     'sprint' | 'retro' | 'userstory' | 'standup' | 'refinement' | 'health' | 'pi' |
-    'okr' | 'prioritize' | 'stakeholder' | 'roadmap' | 'research' | null
+    'okr' | 'prioritize' | 'stakeholder' | 'roadmap' | 'research' |
+    'timer' | 'certprep' | null
   >(null);
 
   const startCoachingSession = useCallback(() => {
     const prompt =
       "I'd like to start a coaching session. Begin by warmly asking me about my biggest Agile challenge right now. Ask 2–3 follow-up clarifying questions one at a time before you coach me. Don't lecture — make this a real coaching conversation where you draw out my thinking first.";
-    router.navigate({ pathname: '/', params: { prompt, t: Date.now().toString() } } as any);
+    router.navigate({ pathname: '/', params: { prompt, chatTitle: 'Coaching Session', t: Date.now().toString() } } as any);
   }, []);
 
   const openBoardAnalysis = useCallback(() => {
@@ -1063,7 +1378,7 @@ export default function ToolsScreen() {
         <Text style={styles.headerSub}>Structured Agile coaching flows</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, wide && styles.scrollWide]} showsVerticalScrollIndicator={false}>
 
         <Text style={styles.groupLabel}>GUIDED SESSIONS</Text>
         <ToolCard
@@ -1141,6 +1456,22 @@ export default function ToolsScreen() {
           onPress={() => setActiveSheet('research')}
         />
 
+        <Text style={[styles.groupLabel, { marginTop: 24 }]}>CERTIFICATION PREP</Text>
+        <ToolCard
+          icon="🎓"
+          title="Cert Prep"
+          description="Practice questions, concept review, and mock exams for PSM, PSPO, SAFe, and more"
+          onPress={() => setActiveSheet('certprep')}
+        />
+
+        <Text style={[styles.groupLabel, { marginTop: 24 }]}>UTILITIES</Text>
+        <ToolCard
+          icon="⏱️"
+          title="Ceremony Timer"
+          description="Timebox your standups, planning, retros, and refinement sessions"
+          onPress={() => setActiveSheet('timer')}
+        />
+
         <Text style={[styles.groupLabel, { marginTop: 24 }]}>1-ON-1 COACHING</Text>
         <ToolCard
           icon="🧑‍💼"
@@ -1172,6 +1503,8 @@ export default function ToolsScreen() {
       <StakeholderUpdateSheet visible={activeSheet === 'stakeholder'} onClose={() => setActiveSheet(null)} />
       <ProductRoadmapSheet visible={activeSheet === 'roadmap'} onClose={() => setActiveSheet(null)} />
       <ResearchSynthesisSheet visible={activeSheet === 'research'} onClose={() => setActiveSheet(null)} />
+      <CeremonyTimerSheet visible={activeSheet === 'timer'} onClose={() => setActiveSheet(null)} />
+      <CertPrepSheet visible={activeSheet === 'certprep'} onClose={() => setActiveSheet(null)} />
     </SafeAreaView>
   );
 }
@@ -1187,6 +1520,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 22, fontWeight: '700', color: Colors.text, letterSpacing: -0.3 },
   headerSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
   scroll: { padding: 16 },
+  scrollWide: { maxWidth: 680, alignSelf: 'center', width: '100%' },
   groupLabel: {
     fontSize: 11,
     fontWeight: '700',

@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Platform,
   Share,
+  Alert,
   Modal,
   ActivityIndicator,
   ScrollView,
@@ -29,7 +30,13 @@ export default function ConversationDetailScreen() {
   const [summaryVisible, setSummaryVisible] = useState(false);
   const [summaryText, setSummaryText] = useState('');
   const [summarizing, setSummarizing] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 1500);
+  };
 
   useEffect(() => {
     getConversations().then(list => {
@@ -102,11 +109,35 @@ export default function ConversationDetailScreen() {
     }
   };
 
-  const handleShare = async () => {
-    const text = conversation.messages
-      .map(m => `${m.role === 'user' ? 'You' : 'AgileIQ'}: ${m.content}`)
-      .join('\n\n');
-    await Share.share({ message: `${conversation.title}\n\n${text}` });
+  const handleShare = () => {
+    Alert.alert('Share Conversation', undefined, [
+      {
+        text: 'Share as Text',
+        onPress: async () => {
+          const text = conversation.messages
+            .map(m => `${m.role === 'user' ? 'You' : 'AgileIQ'}: ${m.content}`)
+            .join('\n\n');
+          await Share.share({ message: `${conversation.title}\n\n${text}` });
+        },
+      },
+      {
+        text: 'Export as Markdown',
+        onPress: async () => {
+          const lines: string[] = [
+            `# ${conversation.title}`,
+            `*${formattedDate}*`,
+            '',
+            ...conversation.messages.map(m =>
+              m.role === 'user'
+                ? `**You:** ${m.content}`
+                : `**AgileIQ:** ${m.content}`
+            ),
+          ];
+          await Share.share({ message: lines.join('\n\n'), title: conversation.title });
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   const date = new Date(conversation.date);
@@ -152,16 +183,26 @@ export default function ConversationDetailScreen() {
         data={conversation.messages}
         keyExtractor={(_, i) => i.toString()}
         contentContainerStyle={styles.list}
+        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
         renderItem={({ item }) => (
-          <DetailBubble role={item.role} content={item.content} />
+          <DetailBubble role={item.role} content={item.content} onCopy={() => showToast('Copied')} />
         )}
       />
+
+      {!!toast && (
+        <View style={styles.toastWrapper} pointerEvents="none">
+          <View style={styles.toast}>
+            <Text style={styles.toastText}>{toast}</Text>
+          </View>
+        </View>
+      )}
 
       <SafeAreaView edges={['bottom']} style={styles.footer}>
         <View style={styles.footerRow}>
           <TouchableOpacity
-            style={styles.summarizeBtn}
+            style={[styles.summarizeBtn, summarizing && styles.summarizeBtnDisabled]}
             onPress={handleSummarize}
+            disabled={summarizing}
             activeOpacity={0.8}
           >
             <Text style={styles.summarizeBtnText}>Summarize</Text>
@@ -214,12 +255,13 @@ export default function ConversationDetailScreen() {
   );
 }
 
-function DetailBubble({ role, content }: { role: 'user' | 'assistant'; content: string }) {
+function DetailBubble({ role, content, onCopy }: { role: 'user' | 'assistant'; content: string; onCopy: () => void }) {
   const isUser = role === 'user';
 
   const handleLongPress = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await Clipboard.setStringAsync(content);
+    onCopy();
   };
 
   return (
@@ -338,11 +380,30 @@ const styles = StyleSheet.create({
     borderColor: Colors.teal,
     backgroundColor: 'transparent',
   },
+  summarizeBtnDisabled: {
+    borderColor: Colors.grayDark,
+    opacity: 0.4,
+  },
   summarizeBtnText: {
     color: Colors.teal,
     fontWeight: '700',
     fontSize: 16,
   },
+  toastWrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 110,
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  toast: {
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
+  },
+  toastText: { color: Colors.white, fontSize: 14, fontWeight: '500' },
   continueBtn: {
     flex: 2,
     backgroundColor: Colors.teal,

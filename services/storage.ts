@@ -249,3 +249,55 @@ export async function updateStreak(): Promise<number> {
   await AsyncStorage.setItem(STREAK_KEY, JSON.stringify({ lastDate: t, count: newCount }));
   return newCount;
 }
+
+// ── Notes ─────────────────────────────────────────────────────────────────────
+
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const NOTES_KEY = 'sprint_notes';
+const MAX_NOTES = 200;
+
+export async function getNotes(): Promise<Note[]> {
+  const raw = await AsyncStorage.getItem(NOTES_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export async function saveNote(note: Note): Promise<void> {
+  const list = await getNotes();
+  const idx = list.findIndex(n => n.id === note.id);
+  if (idx >= 0) {
+    list[idx] = note;
+  } else {
+    list.unshift(note);
+    if (list.length > MAX_NOTES) list.splice(MAX_NOTES);
+  }
+  await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(list));
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  const list = await getNotes();
+  await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(list.filter(n => n.id !== id)));
+}
+
+// ── Pinned conversations ──────────────────────────────────────────────────────
+
+const PINNED_KEY = 'pinned_conversations';
+
+export async function getPinnedIds(): Promise<string[]> {
+  const raw = await AsyncStorage.getItem(PINNED_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export async function togglePinConversation(id: string): Promise<boolean> {
+  const ids = await getPinnedIds();
+  const pinned = ids.includes(id);
+  const next = pinned ? ids.filter(x => x !== id) : [id, ...ids];
+  await AsyncStorage.setItem(PINNED_KEY, JSON.stringify(next));
+  return !pinned;
+}

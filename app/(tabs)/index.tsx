@@ -12,7 +12,6 @@ import {
   Alert,
   Linking,
   Share,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -153,6 +152,7 @@ export default function ChatScreen() {
   const conversationId = useRef(Date.now().toString());
   const conversationTitleRef = useRef('');
   const streamingIdRef = useRef<string | null>(null);
+  const prevLoadingRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const retryContentRef = useRef<string | null>(null);
   const listRef = useRef<FlatList>(null);
@@ -183,7 +183,7 @@ export default function ChatScreen() {
     if (!byok) setRemaining(await getRemainingQuestions(pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT));
   }, []);
 
-  const { prompt, t, continueId, newChat } = useLocalSearchParams<{ prompt?: string; t?: string; continueId?: string; newChat?: string }>();
+  const { prompt, t, continueId, newChat, chatTitle } = useLocalSearchParams<{ prompt?: string; t?: string; continueId?: string; newChat?: string; chatTitle?: string }>();
   const lastParamKeyRef = useRef('');
   const lastContinueIdRef = useRef('');
 
@@ -194,7 +194,7 @@ export default function ChatScreen() {
     getConversations().then(list => {
       const conv = list.find(c => c.id === continueId);
       if (!conv) return;
-      setMessages(conv.messages.map((m, i) => ({ id: String(i), role: m.role, content: m.content })));
+      setMessages(conv.messages.map((m, i) => ({ id: `${conv.id}-${i}`, role: m.role, content: m.content })));
       conversationId.current = conv.id;
       conversationTitleRef.current = conv.title;
     });
@@ -212,7 +212,7 @@ export default function ChatScreen() {
         setError(null);
         setIsOffline(false);
         conversationId.current = Date.now().toString();
-        conversationTitleRef.current = '';
+        conversationTitleRef.current = chatTitle?.trim() || '';
         AsyncStorage.setItem('chat_draft', '');
       }
       send(prompt);
@@ -229,6 +229,17 @@ export default function ChatScreen() {
     });
     return () => { AsyncStorage.setItem('chat_draft', inputRef.current); };
   }, [refreshTierStatus]));
+
+  // Subtle haptic when streaming completes with content
+  useEffect(() => {
+    if (prevLoadingRef.current && !loading) {
+      const last = messagesRef.current[messagesRef.current.length - 1];
+      if (last?.role === 'assistant' && last.content) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    }
+    prevLoadingRef.current = loading;
+  }, [loading]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -299,6 +310,8 @@ export default function ChatScreen() {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    let fullText = '';
+
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -311,7 +324,7 @@ export default function ChatScreen() {
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
-          max_tokens: 2048,
+          max_tokens: 4096,
           stream: true,
           system: [{ type: 'text', text: systemPromptText, cache_control: { type: 'ephemeral' } }],
           messages: nextMessages.slice(-20).map(m => ({ role: m.role, content: m.content })),
@@ -331,7 +344,6 @@ export default function ChatScreen() {
       if (!reader) throw new Error('Streaming not supported on this platform.');
 
       const decoder = new TextDecoder();
-      let fullText = '';
       let buffer = '';
 
       while (true) {
@@ -393,7 +405,12 @@ export default function ChatScreen() {
 
     } catch (e: unknown) {
       const isAbort = e instanceof Error && e.name === 'AbortError';
-      if (!isAbort) {
+      if (isAbort) {
+        // Remove the assistant bubble only if no content arrived yet
+        if (!fullText) {
+          setMessages(prev => prev.filter(m => m.id !== assistantId));
+        }
+      } else {
         setMessages(prev => prev.filter(m => m.id !== assistantId && m.id !== userMsg.id));
         retryContentRef.current = content;
         if (isNetworkError(e)) setIsOffline(true);
@@ -429,6 +446,17 @@ export default function ChatScreen() {
     } catch {}
   }, []);
 
+  const handleRegenerate = useCallback(() => {
+    const msgs = messagesRef.current;
+    const lastUserIdx = msgs.map(m => m.role).lastIndexOf('user');
+    if (lastUserIdx === -1 || loadingRef.current) return;
+    const lastUserContent = msgs[lastUserIdx].content;
+    const truncated = msgs.slice(0, lastUserIdx);
+    messagesRef.current = truncated;
+    setMessages(truncated);
+    send(lastUserContent);
+  }, [send]);
+
   const startNewChat = useCallback(() => {
     abortControllerRef.current?.abort();
     setMessages([]);
@@ -450,11 +478,12 @@ export default function ChatScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Image
-          source={require('../../assets/logo.png')}
-          style={styles.headerLogo}
-          resizeMode="contain"
-        />
+        <View style={styles.headerWordmark}>
+          <Text style={styles.wordmarkMain}>
+            Agile<Text style={styles.wordmarkAccent}>IQ</Text>
+          </Text>
+          <Text style={styles.wordmarkSub}>AI Agile Coach</Text>
+        </View>
         <View style={styles.headerRight}>
           <View style={styles.headerBadgeRow}>
             {(isByok || isPro) ? (
@@ -494,19 +523,28 @@ export default function ChatScreen() {
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         onScroll={handleScroll}
         scrollEventThrottle={16}
+        ListHeaderComponent={
+          messages.length > 20
+            ? <View style={styles.contextBanner}>
+                <Text style={styles.contextBannerText}>⚠ Earlier messages not sent to AI — context window starts here</Text>
+              </View>
+            : null
+        }
         ListEmptyComponent={<EmptyState onSuggestion={s => send(s)} profile={profile} />}
         ListFooterComponent={
           !loading && messages.length > 0
             ? <FollowUpChips messages={messages} onSelect={send} />
             : null
         }
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <MessageBubble
             message={item}
             isStreaming={loading && item.id === streamingIdRef.current}
+            isLast={index === messages.length - 1}
             onCopy={() => showToast('Copied')}
             onSave={() => handleSaveMessage(item)}
             onShare={() => handleShareMessage(item)}
+            onRegenerate={handleRegenerate}
           />
         )}
       />
@@ -619,18 +657,22 @@ const dotStyles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.teal },
 });
 
-function MessageBubble({
+const MessageBubble = React.memo(function MessageBubble({
   message,
   isStreaming,
+  isLast,
   onCopy,
   onSave,
   onShare,
+  onRegenerate,
 }: {
   message: Message;
   isStreaming: boolean;
+  isLast: boolean;
   onCopy: () => void;
   onSave: () => void;
   onShare: () => void;
+  onRegenerate: () => void;
 }) {
   const isUser = message.role === 'user';
 
@@ -672,21 +714,31 @@ function MessageBubble({
         </TouchableOpacity>
         {!isUser && !isStreaming && !!message.content && (
           <View style={styles.msgActions}>
-            <TouchableOpacity onPress={handleCopy} style={styles.msgAction} activeOpacity={0.7}>
-              <Text style={styles.msgActionText}>Copy</Text>
+            <TouchableOpacity onPress={handleCopy} style={[styles.msgAction, styles.msgActionCopy]} activeOpacity={0.7}>
+              <Text style={[styles.msgActionText, styles.msgActionTextCopy]}>⎘ Copy</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={onSave} style={styles.msgAction} activeOpacity={0.7}>
-              <Text style={styles.msgActionText}>Save</Text>
+              <Text style={styles.msgActionText}>♡ Save</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={onShare} style={styles.msgAction} activeOpacity={0.7}>
-              <Text style={styles.msgActionText}>Share</Text>
+              <Text style={styles.msgActionText}>↑ Share</Text>
             </TouchableOpacity>
+            {isLast && (
+              <TouchableOpacity onPress={onRegenerate} style={styles.msgAction} activeOpacity={0.7}>
+                <Text style={styles.msgActionText}>↺ Retry</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
     </View>
   );
-}
+}, (prev, next) =>
+  prev.message.id === next.message.id &&
+  prev.message.content === next.message.content &&
+  prev.isStreaming === next.isStreaming &&
+  prev.isLast === next.isLast
+);
 
 function TipCard({ tip, onAsk }: { tip: string; onAsk: (text: string) => void }) {
   return (
@@ -705,17 +757,14 @@ function TipCard({ tip, onAsk }: { tip: string; onAsk: (text: string) => void })
 function EmptyState({ onSuggestion, profile }: { onSuggestion: (text: string) => void; profile: UserProfile | null }) {
   const roleSuggestions = profile?.role ? ROLE_SUGGESTIONS[profile.role] : null;
   const suggestions = roleSuggestions ?? DEFAULT_SUGGESTIONS;
-  const greeting = profile?.role
-    ? `${getGreeting()}, ${profile.role}`
-    : getGreeting();
+  const namedRole = profile?.role && profile.role !== 'Other' ? profile.role : null;
+  const greeting = namedRole ? `${getGreeting()}, ${namedRole}` : getGreeting();
 
   return (
     <View style={styles.empty}>
-      <Image
-        source={require('../../assets/logo.png')}
-        style={styles.emptyLogo}
-        resizeMode="contain"
-      />
+      <View style={styles.emptyBadge}>
+        <Text style={styles.emptyBadgeText}>IQ</Text>
+      </View>
       <Text style={styles.emptyTitle}>{greeting}</Text>
       <Text style={styles.emptySub}>
         I'm AgileIQ. Ask me anything about Scrum, SAFe, coaching, sprints, and more.
@@ -804,7 +853,10 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerLogo: { width: 148, height: 44, borderRadius: 8 },
+  headerWordmark: { justifyContent: 'center' },
+  wordmarkMain: { fontSize: 22, fontWeight: '800', color: Colors.white, letterSpacing: -0.5 },
+  wordmarkAccent: { color: Colors.teal },
+  wordmarkSub: { fontSize: 10, color: Colors.grayDark, letterSpacing: 0.4, marginTop: 1 },
   headerTitle: { fontSize: 22, fontWeight: '700', color: Colors.teal, letterSpacing: -0.3 },
   headerSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 1 },
   headerRight: { alignItems: 'flex-end', gap: 8 },
@@ -822,6 +874,16 @@ const styles = StyleSheet.create({
   },
   newChatText: { fontSize: 12, color: Colors.teal, fontWeight: '600' },
   list: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 12 },
+  contextBanner: {
+    marginBottom: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    backgroundColor: Colors.navyMid,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  contextBannerText: { fontSize: 12, color: Colors.grayDark, textAlign: 'center' },
   listEmpty: { flex: 1 },
   bubbleRow: { alignItems: 'flex-start' },
   bubbleRowUser: { alignItems: 'flex-end' },
@@ -913,9 +975,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelIcon: { color: Colors.white, fontSize: 16, fontWeight: '700' },
-  msgActions: { flexDirection: 'row', gap: 14, marginTop: 4, marginLeft: 4 },
-  msgAction: {},
-  msgActionText: { fontSize: 11, color: Colors.grayDark, fontWeight: '500' },
+  msgActions: { flexDirection: 'row', gap: 6, marginTop: 6, marginLeft: 2 },
+  msgAction: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  msgActionCopy: {
+    borderColor: Colors.teal,
+    backgroundColor: Colors.tealDim,
+  },
+  msgActionText: { fontSize: 12, color: Colors.textSecondary, fontWeight: '500' },
+  msgActionTextCopy: { color: Colors.tealLight, fontWeight: '600' },
   followUps: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 4, gap: 8 },
   followUpChip: {
     alignSelf: 'flex-start',
@@ -953,7 +1027,25 @@ const styles = StyleSheet.create({
   },
   scrollBtnIcon: { fontSize: 18, color: Colors.teal, fontWeight: '700', marginTop: -1 },
   empty: { flex: 1, paddingHorizontal: 24, paddingTop: 32, alignItems: 'center' },
-  emptyLogo: { width: 240, height: 130, borderRadius: 16, marginBottom: 16 },
+  emptyBadge: {
+    width: 88,
+    height: 88,
+    borderRadius: 26,
+    backgroundColor: Colors.teal,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    shadowColor: Colors.teal,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+  },
+  emptyBadgeText: {
+    fontSize: 36,
+    fontWeight: '900',
+    color: Colors.white,
+    letterSpacing: -1.5,
+  },
   emptyTitle: { fontSize: 26, fontWeight: '700', color: Colors.text, textAlign: 'center', marginBottom: 12 },
   emptySub: {
     fontSize: 16,

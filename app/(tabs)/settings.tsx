@@ -10,6 +10,7 @@ import {
   Platform,
   ActivityIndicator,
   Switch,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -150,6 +151,14 @@ export default function SettingsScreen() {
     }
     await setNotificationsEnabled(value);
     setNotificationsEnabledState(value);
+  };
+
+  const handleShareApp = async () => {
+    try {
+      await Share.share({
+        message: 'Check out AgileIQ — an AI Agile coach for Scrum Masters, Coaches, and Product Owners. It answers any Agile question instantly.',
+      });
+    } catch {}
   };
 
   function maskedKey(key: string): string {
@@ -399,6 +408,17 @@ export default function SettingsScreen() {
                 thumbColor={Colors.white}
               />
             </View>
+          </View>
+        </View>
+
+        {/* Share */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>SHARE</Text>
+          <View style={styles.card}>
+            <TouchableOpacity style={styles.infoRow} onPress={handleShareApp} activeOpacity={0.7}>
+              <Text style={styles.infoLabel}>Share AgileIQ with a Friend</Text>
+              <Text style={styles.infoChevron}>↑</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
