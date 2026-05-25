@@ -18,8 +18,9 @@ import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import Markdown from 'react-native-markdown-display';
 import { Colors } from '../../constants/colors';
-import { getApiKey } from '../../services/secureStorage';
-import { saveConversation } from '../../services/storage';
+import { getApiKey, getAppApiKey } from '../../services/secureStorage';
+import { saveConversation, getIsPro } from '../../services/storage';
+import { presentProPaywall } from '../../services/revenueCat';
 import { friendlyApiError } from '../../services/apiErrors';
 
 const ANALYSIS_SYSTEM_PROMPT =
@@ -108,10 +109,22 @@ export default function AnalyzeScreen() {
     if (!image) return;
     const finalPrompt = prompt.trim() || 'Analyze this and provide specific Agile coaching recommendations.';
 
-    const apiKey = await getApiKey();
+    const byokKey = await getApiKey();
+    const appKey = getAppApiKey();
+    const apiKey = byokKey ?? appKey;
+
     if (!apiKey) {
-      setError('Add your Anthropic API key in Settings to get started.');
+      setError('No API key configured. Please add your Anthropic API key in Settings.');
       return;
+    }
+
+    // Board analysis is Pro/BYOK only — vision API is a premium feature
+    if (!byokKey) {
+      const pro = await getIsPro();
+      if (!pro) {
+        const upgraded = await presentProPaywall();
+        if (!upgraded) return;
+      }
     }
 
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

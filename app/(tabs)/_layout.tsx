@@ -52,7 +52,10 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="analyze"
-        options={{ href: null }}
+        options={{
+          title: 'Analyze',
+          tabBarIcon: tabIcon('scan-outline', 'scan'),
+        }}
       />
       <Tabs.Screen
         name="history"

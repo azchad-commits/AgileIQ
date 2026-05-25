@@ -18,6 +18,21 @@ import { Colors } from '../../constants/colors';
 
 // ── Module-level constants ────────────────────────────────────────────────────
 
+const STANDUP_BLOCKERS = [
+  'Dependencies', 'Unclear requirements', 'Technical debt',
+  'WIP overload', 'Team absence', 'Environment issues',
+];
+const REFINEMENT_ISSUES = [
+  'Too large', 'Missing ACs', 'Unclear value',
+  'Hidden dependencies', 'Tech uncertainty', 'Stale story',
+];
+const HEALTH_DIMENSIONS = [
+  'Delivering value', 'Easy to release', 'Fun', 'Learning',
+  'Mission', 'Speed', 'Support', 'Teamwork',
+];
+const PI_OBJ_COUNTS = ['1', '2', '3', '4', '5', '6+'];
+const PI_RISKS = ['Dependencies', 'Capacity', 'Technology', 'Business alignment', 'Architecture'];
+
 const SPRINT_CONCERNS = [
   'Too many carry-overs',
   'Scope creep',
@@ -460,6 +475,196 @@ function UserStorySheet({ visible, onClose }: { visible: boolean; onClose: () =>
   );
 }
 
+// ── Daily Standup ─────────────────────────────────────────────────────────────
+
+function DailyStandupSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [yesterday, setYesterday] = useState('');
+  const [today, setToday] = useState('');
+  const [teamSize, setTeamSize] = useState(6);
+  const [blockers, setBlockers] = useState<string[]>([]);
+
+  const toggleBlocker = (v: string) =>
+    setBlockers(prev => prev.includes(v) ? prev.filter(b => b !== v) : [...prev, v]);
+
+  const handleGenerate = () => {
+    if (!yesterday.trim() && !today.trim()) return;
+    const parts = [
+      `Help me prepare for today's Daily Scrum.`,
+      yesterday.trim() ? `\n\n**Completed yesterday:** ${yesterday.trim()}` : '',
+      today.trim() ? `\n\n**Planned for today:** ${today.trim()}` : '',
+      blockers.length > 0 ? `\n\n**Blockers/impediments:** ${blockers.join(', ')}` : '',
+      `\n**Team size:** ${teamSize}`,
+      `\n\nPlease:\n1. Help me frame a clear, focused standup update\n2. Identify any hidden risks or dependencies in what I've shared\n3. Suggest how to raise any impediments effectively\n4. Give 1–2 coaching tips for running a tight, valuable Daily Scrum`,
+    ];
+    reset();
+    onClose();
+    setTimeout(() => {
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+    }, 300);
+  };
+
+  const reset = () => { setYesterday(''); setToday(''); setTeamSize(6); setBlockers([]); };
+
+  return (
+    <Sheet visible={visible} onClose={() => { reset(); onClose(); }} title="☀️ Daily Standup">
+      <Text style={f.fieldLabel}>COMPLETED YESTERDAY</Text>
+      <TextInput style={f.textArea} value={yesterday} onChangeText={setYesterday}
+        placeholder="What did you finish or work on?" placeholderTextColor={Colors.grayDark}
+        multiline maxLength={300} />
+      <Text style={f.fieldLabel}>PLANNED FOR TODAY *</Text>
+      <TextInput style={f.textArea} value={today} onChangeText={setToday}
+        placeholder="What are you working on today?" placeholderTextColor={Colors.grayDark}
+        multiline maxLength={300} />
+      <Stepper label="Team size" value={teamSize} min={2} max={20} onChange={setTeamSize} />
+      <ChipGroup label="BLOCKERS (pick any)" options={STANDUP_BLOCKERS} selected={blockers} onSelect={toggleBlocker} multi />
+      <TouchableOpacity
+        style={[f.submitBtn, (!yesterday.trim() && !today.trim()) && f.submitBtnDisabled]}
+        onPress={handleGenerate} disabled={!yesterday.trim() && !today.trim()} activeOpacity={0.85}>
+        <Text style={f.submitBtnText}>Prepare Standup →</Text>
+      </TouchableOpacity>
+      <View style={{ height: 40 }} />
+    </Sheet>
+  );
+}
+
+// ── Backlog Refinement ────────────────────────────────────────────────────────
+
+function BacklogRefinementSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [stories, setStories] = useState('');
+  const [teamSize, setTeamSize] = useState(6);
+  const [issues, setIssues] = useState<string[]>([]);
+
+  const toggleIssue = (v: string) =>
+    setIssues(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+
+  const handleGenerate = () => {
+    if (!stories.trim()) return;
+    const parts = [
+      `Help me refine these backlog items:\n\n${stories.trim()}`,
+      issues.length > 0 ? `\n\n**Common issues I'm seeing:** ${issues.join(', ')}` : '',
+      `\n**Team size:** ${teamSize}`,
+      `\n\nFor each story please:\n1. Assess readiness (Definition of Ready check)\n2. Identify gaps in acceptance criteria\n3. Flag stories that need splitting and suggest how\n4. Estimate relative complexity (S/M/L/XL)\n5. Surface hidden dependencies or risks`,
+    ];
+    reset();
+    onClose();
+    setTimeout(() => {
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+    }, 300);
+  };
+
+  const reset = () => { setStories(''); setTeamSize(6); setIssues([]); };
+
+  return (
+    <Sheet visible={visible} onClose={() => { reset(); onClose(); }} title="📋 Backlog Refinement">
+      <Text style={f.fieldLabel}>STORIES TO REFINE *</Text>
+      <TextInput style={[f.textArea, { minHeight: 100 }]} value={stories} onChangeText={setStories}
+        placeholder="Paste or describe the stories you want to refine…" placeholderTextColor={Colors.grayDark}
+        multiline maxLength={600} />
+      <Stepper label="Team size" value={teamSize} min={2} max={20} onChange={setTeamSize} />
+      <ChipGroup label="COMMON ISSUES (pick any)" options={REFINEMENT_ISSUES} selected={issues} onSelect={toggleIssue} multi />
+      <TouchableOpacity
+        style={[f.submitBtn, !stories.trim() && f.submitBtnDisabled]}
+        onPress={handleGenerate} disabled={!stories.trim()} activeOpacity={0.85}>
+        <Text style={f.submitBtnText}>Refine Stories →</Text>
+      </TouchableOpacity>
+      <View style={{ height: 40 }} />
+    </Sheet>
+  );
+}
+
+// ── Team Health Check ─────────────────────────────────────────────────────────
+
+function TeamHealthSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [dimensions, setDimensions] = useState<string[]>([]);
+  const [teamSize, setTeamSize] = useState(6);
+  const [context, setContext] = useState('');
+
+  const toggleDimension = (v: string) =>
+    setDimensions(prev => prev.includes(v) ? prev.filter(d => d !== v) : [...prev, v]);
+
+  const handleGenerate = () => {
+    const selected = dimensions.length > 0 ? dimensions : HEALTH_DIMENSIONS;
+    const parts = [
+      `Run a Team Health Check for our Agile team of ${teamSize} people.`,
+      context.trim() ? `\n\n**Context:** ${context.trim()}` : '',
+      `\n\n**Focus areas:** ${selected.join(', ')}`,
+      `\n\nPlease:\n1. For each area, provide 3 diagnostic questions the team should honestly answer\n2. Describe what healthy vs. unhealthy looks like for each\n3. Suggest one concrete improvement action per area\n4. Recommend how to run the health check session (format, timing, facilitation tips)`,
+    ];
+    reset();
+    onClose();
+    setTimeout(() => {
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+    }, 300);
+  };
+
+  const reset = () => { setDimensions([]); setTeamSize(6); setContext(''); };
+
+  return (
+    <Sheet visible={visible} onClose={() => { reset(); onClose(); }} title="❤️ Team Health Check">
+      <Stepper label="Team size" value={teamSize} min={2} max={30} onChange={setTeamSize} />
+      <Text style={f.fieldLabel}>TEAM CONTEXT (optional)</Text>
+      <TextInput style={f.textArea} value={context} onChangeText={setContext}
+        placeholder="e.g. Remote team, new members joining, post-release…"
+        placeholderTextColor={Colors.grayDark} multiline maxLength={200} />
+      <ChipGroup label="FOCUS AREAS (pick any, or leave blank for all)" options={HEALTH_DIMENSIONS}
+        selected={dimensions} onSelect={toggleDimension} multi />
+      <TouchableOpacity style={f.submitBtn} onPress={handleGenerate} activeOpacity={0.85}>
+        <Text style={f.submitBtnText}>Run Health Check →</Text>
+      </TouchableOpacity>
+      <View style={{ height: 40 }} />
+    </Sheet>
+  );
+}
+
+// ── PI Planning ───────────────────────────────────────────────────────────────
+
+function PIPlanningSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [piGoal, setPiGoal] = useState('');
+  const [teams, setTeams] = useState(4);
+  const [objectives, setObjectives] = useState('3');
+  const [risks, setRisks] = useState<string[]>([]);
+
+  const toggleRisk = (v: string) =>
+    setRisks(prev => prev.includes(v) ? prev.filter(r => r !== v) : [...prev, v]);
+
+  const handleGenerate = () => {
+    if (!piGoal.trim()) return;
+    const parts = [
+      `Help me plan our SAFe PI Planning event.`,
+      `\n\n**PI Goal / Vision:** ${piGoal.trim()}`,
+      `\n**Number of teams:** ${teams}`,
+      `\n**PI Objectives target per team:** ${objectives}`,
+      risks.length > 0 ? `\n**Known risks:** ${risks.join(', ')}` : '',
+      `\n\nPlease provide:\n1. Recommended PI Planning agenda and timing for ${teams} teams\n2. How to craft strong, measurable PI Objectives\n3. ROAM framework guidance for the identified risks\n4. Tips for the team breakout sessions\n5. How to run a successful System Demo and Inspect & Adapt`,
+    ];
+    reset();
+    onClose();
+    setTimeout(() => {
+      router.navigate({ pathname: '/', params: { prompt: parts.join(''), t: Date.now().toString(), newChat: '1' } } as any);
+    }, 300);
+  };
+
+  const reset = () => { setPiGoal(''); setTeams(4); setObjectives('3'); setRisks([]); };
+
+  return (
+    <Sheet visible={visible} onClose={() => { reset(); onClose(); }} title="🗓️ PI Planning">
+      <Text style={f.fieldLabel}>PI GOAL / VISION *</Text>
+      <TextInput style={f.textArea} value={piGoal} onChangeText={setPiGoal}
+        placeholder="What is the overarching goal for this Program Increment?"
+        placeholderTextColor={Colors.grayDark} multiline maxLength={300} />
+      <Stepper label="Number of teams" value={teams} min={2} max={15} onChange={setTeams} />
+      <ChipGroup label="PI OBJECTIVES PER TEAM" options={PI_OBJ_COUNTS} selected={objectives} onSelect={setObjectives} />
+      <ChipGroup label="KNOWN RISKS (pick any)" options={PI_RISKS} selected={risks} onSelect={toggleRisk} multi />
+      <TouchableOpacity
+        style={[f.submitBtn, !piGoal.trim() && f.submitBtnDisabled]}
+        onPress={handleGenerate} disabled={!piGoal.trim()} activeOpacity={0.85}>
+        <Text style={f.submitBtnText}>Plan the PI →</Text>
+      </TouchableOpacity>
+      <View style={{ height: 40 }} />
+    </Sheet>
+  );
+}
+
 // ── Tool card ─────────────────────────────────────────────────────────────────
 
 function ToolCard({
@@ -507,7 +712,7 @@ const tc = StyleSheet.create({
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function ToolsScreen() {
-  const [activeSheet, setActiveSheet] = useState<'sprint' | 'retro' | 'userstory' | null>(null);
+  const [activeSheet, setActiveSheet] = useState<'sprint' | 'retro' | 'userstory' | 'standup' | 'refinement' | 'health' | 'pi' | null>(null);
 
   const startCoachingSession = useCallback(() => {
     const prompt =
@@ -547,6 +752,30 @@ export default function ToolsScreen() {
           description="Generate well-formed user stories with acceptance criteria for any feature or epic"
           onPress={() => setActiveSheet('userstory')}
         />
+        <ToolCard
+          icon="☀️"
+          title="Daily Standup Prep"
+          description="Frame a focused standup update and get coaching on surfacing blockers effectively"
+          onPress={() => setActiveSheet('standup')}
+        />
+        <ToolCard
+          icon="📋"
+          title="Backlog Refinement"
+          description="Get a Definition of Ready check, splitting suggestions, and complexity estimates"
+          onPress={() => setActiveSheet('refinement')}
+        />
+        <ToolCard
+          icon="❤️"
+          title="Team Health Check"
+          description="Diagnose team health across 8 Agile dimensions with facilitation guidance"
+          onPress={() => setActiveSheet('health')}
+        />
+        <ToolCard
+          icon="🗓️"
+          title="PI Planning"
+          description="Plan your SAFe Program Increment with agenda, objectives, and ROAM risk guidance"
+          onPress={() => setActiveSheet('pi')}
+        />
 
         <Text style={[styles.groupLabel, { marginTop: 24 }]}>1-ON-1 COACHING</Text>
         <ToolCard
@@ -567,18 +796,13 @@ export default function ToolsScreen() {
         <View style={{ height: 24 }} />
       </ScrollView>
 
-      <SprintPlannerSheet
-        visible={activeSheet === 'sprint'}
-        onClose={() => setActiveSheet(null)}
-      />
-      <RetroSheet
-        visible={activeSheet === 'retro'}
-        onClose={() => setActiveSheet(null)}
-      />
-      <UserStorySheet
-        visible={activeSheet === 'userstory'}
-        onClose={() => setActiveSheet(null)}
-      />
+      <SprintPlannerSheet visible={activeSheet === 'sprint'} onClose={() => setActiveSheet(null)} />
+      <RetroSheet visible={activeSheet === 'retro'} onClose={() => setActiveSheet(null)} />
+      <UserStorySheet visible={activeSheet === 'userstory'} onClose={() => setActiveSheet(null)} />
+      <DailyStandupSheet visible={activeSheet === 'standup'} onClose={() => setActiveSheet(null)} />
+      <BacklogRefinementSheet visible={activeSheet === 'refinement'} onClose={() => setActiveSheet(null)} />
+      <TeamHealthSheet visible={activeSheet === 'health'} onClose={() => setActiveSheet(null)} />
+      <PIPlanningSheet visible={activeSheet === 'pi'} onClose={() => setActiveSheet(null)} />
     </SafeAreaView>
   );
 }

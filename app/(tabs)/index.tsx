@@ -11,6 +11,7 @@ import {
   StyleSheet,
   Alert,
   Linking,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -364,6 +365,12 @@ export default function ChatScreen() {
     showToast('Saved to Favorites');
   }, [showToast]);
 
+  const handleShareMessage = useCallback(async (msg: Message) => {
+    try {
+      await Share.share({ message: msg.content });
+    } catch {}
+  }, []);
+
   const startNewChat = useCallback(() => {
     abortControllerRef.current?.abort();
     setMessages([]);
@@ -435,6 +442,7 @@ export default function ChatScreen() {
             isStreaming={loading && item.id === streamingIdRef.current}
             onCopy={() => showToast('Copied')}
             onSave={() => handleSaveMessage(item)}
+            onShare={() => handleShareMessage(item)}
           />
         )}
       />
@@ -552,11 +560,13 @@ function MessageBubble({
   isStreaming,
   onCopy,
   onSave,
+  onShare,
 }: {
   message: Message;
   isStreaming: boolean;
   onCopy: () => void;
   onSave: () => void;
+  onShare: () => void;
 }) {
   const isUser = message.role === 'user';
 
@@ -603,6 +613,9 @@ function MessageBubble({
             </TouchableOpacity>
             <TouchableOpacity onPress={onSave} style={styles.msgAction} activeOpacity={0.7}>
               <Text style={styles.msgActionText}>Save</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onShare} style={styles.msgAction} activeOpacity={0.7}>
+              <Text style={styles.msgActionText}>Share</Text>
             </TouchableOpacity>
           </View>
         )}

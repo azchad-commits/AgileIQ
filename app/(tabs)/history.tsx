@@ -19,8 +19,12 @@ import {
   getConversations,
   deleteConversation,
   clearAllHistory,
+  getFavorites,
+  deleteFavorite,
   type Conversation,
+  type Favorite,
 } from '../../services/storage';
+import { Share } from 'react-native';
 
 function groupConversations(list: Conversation[]): Array<{ title: string; data: Conversation[] }> {
   const now = new Date();
@@ -173,13 +177,16 @@ const sr = StyleSheet.create({
 });
 
 export default function HistoryScreen() {
+  const [tab, setTab] = useState<'history' | 'saved'>('history');
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [query, setQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    const data = await getConversations();
-    setConversations(data);
+    const [convs, favs] = await Promise.all([getConversations(), getFavorites()]);
+    setConversations(convs);
+    setFavorites(favs);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -220,6 +227,21 @@ export default function HistoryScreen() {
     ]);
   };
 
+  const handleDeleteFavorite = (id: string) => {
+    Alert.alert('Remove saved item?', undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          await deleteFavorite(id);
+          setFavorites(prev => prev.filter(f => f.id !== id));
+        },
+      },
+    ]);
+  };
+
   const q = query.trim().toLowerCase();
   const filtered = q
     ? conversations.filter(c =>
@@ -236,65 +258,123 @@ export default function HistoryScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>History</Text>
-        {conversations.length > 0 && (
+        {tab === 'history' && conversations.length > 0 && (
           <TouchableOpacity onPress={handleClearAll} activeOpacity={0.7}>
             <Text style={styles.clearText}>Clear All</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {conversations.length > 0 && (
-        <View style={styles.searchWrapper}>
-          <TextInput
-            style={styles.searchInput}
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search conversations…"
-            placeholderTextColor={Colors.grayDark}
-            autoCapitalize="none"
-            autoCorrect={false}
-            clearButtonMode="while-editing"
-            returnKeyType="search"
-          />
-        </View>
-      )}
+      {/* Segment switcher */}
+      <View style={styles.segmentBar}>
+        <TouchableOpacity
+          style={[styles.segmentBtn, tab === 'history' && styles.segmentBtnActive]}
+          onPress={() => { setTab('history'); setQuery(''); }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.segmentText, tab === 'history' && styles.segmentTextActive]}>Conversations</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.segmentBtn, tab === 'saved' && styles.segmentBtnActive]}
+          onPress={() => { setTab('saved'); setQuery(''); }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.segmentText, tab === 'saved' && styles.segmentTextActive]}>
+            Saved{favorites.length > 0 ? ` (${favorites.length})` : ''}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-      <SectionList
-        sections={sections}
-        keyExtractor={c => c.id}
-        contentContainerStyle={[styles.list, sections.length === 0 && styles.listEmpty]}
-        stickySectionHeadersEnabled={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.teal} />
-        }
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>
-              {query.trim() ? 'No results' : 'No conversations yet'}
-            </Text>
-            <Text style={styles.emptySub}>
-              {query.trim()
-                ? 'Try a different search term.'
-                : 'Your past chats with AgileIQ will appear here.'}
-            </Text>
-          </View>
-        }
-        renderSectionHeader={({ section: { title } }) =>
-          title ? (
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionHeaderText}>{title}</Text>
+      {tab === 'history' ? (
+        <>
+          {conversations.length > 0 && (
+            <View style={styles.searchWrapper}>
+              <TextInput
+                style={styles.searchInput}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search conversations…"
+                placeholderTextColor={Colors.grayDark}
+                autoCapitalize="none"
+                autoCorrect={false}
+                clearButtonMode="while-editing"
+                returnKeyType="search"
+              />
             </View>
-          ) : null
-        }
-        renderItem={({ item }) => (
-          <SwipeRow
-            item={item}
-            onDelete={() => handleDelete(item.id)}
-            onPress={() => router.push(`/conversation/${item.id}`)}
+          )}
+          <SectionList
+            sections={sections}
+            keyExtractor={c => c.id}
+            contentContainerStyle={[styles.list, sections.length === 0 && styles.listEmpty]}
+            stickySectionHeadersEnabled={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.teal} />
+            }
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Text style={styles.emptyTitle}>{query.trim() ? 'No results' : 'No conversations yet'}</Text>
+                <Text style={styles.emptySub}>
+                  {query.trim() ? 'Try a different search term.' : 'Your past chats with AgileIQ will appear here.'}
+                </Text>
+              </View>
+            }
+            renderSectionHeader={({ section: { title } }) =>
+              title ? (
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionHeaderText}>{title}</Text>
+                </View>
+              ) : null
+            }
+            renderItem={({ item }) => (
+              <SwipeRow
+                item={item}
+                onDelete={() => handleDelete(item.id)}
+                onPress={() => router.push(`/conversation/${item.id}`)}
+              />
+            )}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
           />
-        )}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-      />
+        </>
+      ) : (
+        <SectionList
+          sections={favorites.length > 0 ? [{ title: '', data: favorites }] : []}
+          keyExtractor={f => f.id}
+          contentContainerStyle={[styles.list, favorites.length === 0 && styles.listEmpty]}
+          stickySectionHeadersEnabled={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.teal} />}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>No saved responses</Text>
+              <Text style={styles.emptySub}>Tap "Save" on any AgileIQ response to bookmark it here.</Text>
+            </View>
+          }
+          renderSectionHeader={() => null}
+          renderItem={({ item }: { item: Favorite }) => (
+            <TouchableOpacity
+              style={styles.favRow}
+              onLongPress={() => handleDeleteFavorite(item.id)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.favContent}>
+                <Text style={styles.favTitle} numberOfLines={1}>{item.conversationTitle}</Text>
+                <Text style={styles.favPreview} numberOfLines={3}>{item.content}</Text>
+                <Text style={styles.favDate}>
+                  {new Date(item.savedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.favShare}
+                onPress={() => Share.share({ message: item.content })}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.favShareText}>Share</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          )}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -376,5 +456,70 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.grayDark,
     letterSpacing: 0.8,
+  },
+  segmentBar: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  segmentBtnActive: {
+    backgroundColor: Colors.tealDim,
+    borderColor: Colors.teal,
+  },
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.grayDark,
+  },
+  segmentTextActive: {
+    color: Colors.tealLight,
+  },
+  favRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 14,
+    gap: 10,
+  },
+  favContent: {
+    flex: 1,
+  },
+  favTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.teal,
+    marginBottom: 5,
+    letterSpacing: 0.3,
+  },
+  favPreview: {
+    fontSize: 14,
+    color: Colors.text,
+    lineHeight: 20,
+    marginBottom: 6,
+  },
+  favDate: {
+    fontSize: 11,
+    color: Colors.grayDark,
+  },
+  favShare: {
+    paddingTop: 2,
+  },
+  favShareText: {
+    fontSize: 13,
+    color: Colors.teal,
+    fontWeight: '600',
   },
 });

@@ -15,7 +15,7 @@ import { useFocusEffect } from 'expo-router';
 import Constants from 'expo-constants';
 import { Colors } from '../../constants/colors';
 import { getApiKey, setApiKey, deleteApiKey } from '../../services/secureStorage';
-import { getUserContext, setUserContext as saveUserContext, getIsPro, FREE_TIER_LIMIT, PRO_TIER_LIMIT } from '../../services/storage';
+import { getUserContext, setUserContext as saveUserContext, getIsPro, FREE_TIER_LIMIT, PRO_TIER_LIMIT, getUserProfile, setUserProfile, type UserProfile } from '../../services/storage';
 import { syncProStatus, presentProPaywall, restorePurchases } from '../../services/revenueCat';
 import { OnboardingModal } from '../../components/OnboardingModal';
 
@@ -30,6 +30,7 @@ export default function SettingsScreen() {
   const [isPro, setIsProState] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [profile, setProfile] = useState<UserProfile>({ role: '', maturity: '', framework: '' });
 
   const load = useCallback(async () => {
     const [key, pro] = await Promise.all([getApiKey(), syncProStatus()]);
@@ -37,8 +38,9 @@ export default function SettingsScreen() {
     if (key) setApiKeyState(key);
     setTestResult(null);
     setIsProState(pro);
-    const ctx = await getUserContext();
+    const [ctx, prof] = await Promise.all([getUserContext(), getUserProfile()]);
     setUserContext(ctx);
+    if (prof) setProfile(prof);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -272,6 +274,63 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Coaching Profile */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>COACHING PROFILE</Text>
+          <Text style={styles.sectionHint}>
+            Tell AgileIQ about your role and experience for more relevant coaching.
+          </Text>
+          <View style={styles.card}>
+            <View style={styles.profileSection}>
+              <Text style={styles.profileLabel}>YOUR ROLE</Text>
+              <View style={styles.profileChips}>
+                {(['Scrum Master', 'Agile Coach', 'Product Owner', 'Developer', 'Manager', 'Other'] as const).map(r => (
+                  <TouchableOpacity
+                    key={r}
+                    style={[styles.profileChip, profile.role === r && styles.profileChipActive]}
+                    onPress={() => { const p = { ...profile, role: r }; setProfile(p); setUserProfile(p); }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.profileChipText, profile.role === r && styles.profileChipTextActive]}>{r}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.profileSection}>
+              <Text style={styles.profileLabel}>AGILE EXPERIENCE</Text>
+              <View style={styles.profileChips}>
+                {(['Beginner', 'Intermediate', 'Advanced', 'Expert'] as const).map(m => (
+                  <TouchableOpacity
+                    key={m}
+                    style={[styles.profileChip, profile.maturity === m && styles.profileChipActive]}
+                    onPress={() => { const p = { ...profile, maturity: m }; setProfile(p); setUserProfile(p); }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.profileChipText, profile.maturity === m && styles.profileChipTextActive]}>{m}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.profileSection}>
+              <Text style={styles.profileLabel}>PRIMARY FRAMEWORK</Text>
+              <View style={styles.profileChips}>
+                {(['Scrum', 'SAFe', 'Kanban', 'LeSS', 'Spotify', 'Other'] as const).map(fw => (
+                  <TouchableOpacity
+                    key={fw}
+                    style={[styles.profileChip, profile.framework === fw && styles.profileChipActive]}
+                    onPress={() => { const p = { ...profile, framework: fw }; setProfile(p); setUserProfile(p); }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.profileChipText, profile.framework === fw && styles.profileChipTextActive]}>{fw}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </View>
+
         {/* About */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>ABOUT</Text>
@@ -488,5 +547,40 @@ const styles = StyleSheet.create({
   },
   bottomPad: {
     height: 24,
+  },
+  profileSection: {
+    padding: 16,
+  },
+  profileLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.grayDark,
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+  profileChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  profileChip: {
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: Colors.navyMid,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  profileChipActive: {
+    backgroundColor: Colors.tealDim,
+    borderColor: Colors.teal,
+  },
+  profileChipText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  profileChipTextActive: {
+    color: Colors.tealLight,
+    fontWeight: '600',
   },
 });
