@@ -21,7 +21,7 @@ import Markdown from 'react-native-markdown-display';
 import { Colors } from '../../constants/colors';
 import { buildSystemPrompt } from '../../constants/systemPrompt';
 import { getApiKey, getAppApiKey } from '../../services/secureStorage';
-import { syncProStatus, presentProPaywall } from '../../services/revenueCat';
+import { presentProPaywall } from '../../services/revenueCat';
 import {
   saveConversation,
   getConversations,
@@ -117,12 +117,16 @@ export default function ChatScreen() {
   const messagesRef = useRef<Message[]>([]);
   const loadingRef = useRef(false);
   const inputRef = useRef('');
+  const byokKeyRef = useRef<string | null>(null);
+  const isProRef = useRef(false);
   messagesRef.current = messages;
   loadingRef.current = loading;
   inputRef.current = input;
 
   const refreshTierStatus = useCallback(async () => {
-    const [byokKey, pro] = await Promise.all([getApiKey(), syncProStatus()]);
+    const [byokKey, pro] = await Promise.all([getApiKey(), getIsPro()]);
+    byokKeyRef.current = byokKey;
+    isProRef.current = pro;
     const byok = !!byokKey;
     setIsByok(byok);
     setIsPro(pro);
@@ -187,33 +191,43 @@ export default function ChatScreen() {
     retryContentRef.current = null;
     setIsOffline(false);
 
-    const byokKey = await getApiKey();
+    const byokKey = byokKeyRef.current;
     const appKey = getAppApiKey();
     const apiKey = byokKey ?? appKey;
 
     if (!apiKey) {
-      setError('No API key available. Add your Anthropic API key in Settings.');
+      setError('No API key configured. Please add your Anthropic API key in Settings.');
       return;
     }
 
     // Non-BYOK: enforce daily limit and paywall
     if (!byokKey) {
-      const pro = await getIsPro();
-      const limit = pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
-      const allowed = await checkAndIncrementDailyCount(limit);
+      let pro = isProRef.current;
+      let limit = pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
+      let allowed = await checkAndIncrementDailyCount(limit);
+
       if (!allowed) {
         if (!pro) {
           const upgraded = await presentProPaywall();
-          if (upgraded) {
-            setIsPro(true);
-            setRemaining(PRO_TIER_LIMIT - 1);
+          if (!upgraded) return;
+          // Upgrade succeeded — retry with Pro limit and continue sending
+          setIsPro(true);
+          isProRef.current = true;
+          pro = true;
+          limit = PRO_TIER_LIMIT;
+          allowed = await checkAndIncrementDailyCount(limit);
+          if (!allowed) {
+            setError(`You've reached your ${PRO_TIER_LIMIT} question limit for today. Come back tomorrow!`);
+            return;
           }
+          setRemaining(await getRemainingQuestions(PRO_TIER_LIMIT));
         } else {
           setError(`You've reached your ${PRO_TIER_LIMIT} question limit for today. Come back tomorrow!`);
+          return;
         }
-        return;
+      } else {
+        setRemaining(r => Math.max(0, r - 1));
       }
-      setRemaining(r => Math.max(0, r - 1));
     }
 
     const [userCtx, profile] = await Promise.all([getUserContext(), getUserProfile()]);

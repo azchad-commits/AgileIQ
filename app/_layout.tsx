@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -8,6 +9,7 @@ import { OnboardingModal } from '../components/OnboardingModal';
 
 export default function RootLayout() {
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
     initializePurchases();
@@ -15,6 +17,14 @@ export default function RootLayout() {
     hasSeenOnboarding().then(seen => {
       if (!seen) setShowOnboarding(true);
     });
+
+    const sub = AppState.addEventListener('change', nextState => {
+      if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
+        syncProStatus();
+      }
+      appStateRef.current = nextState;
+    });
+    return () => sub.remove();
   }, []);
 
   return (
