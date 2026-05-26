@@ -8,6 +8,12 @@
     "scheme": "agileiq",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0F172A",
+    "description": "AI-powered Agile and Scrum coaching. Get expert guidance on Scrum, SAFe, Kanban, and Agile best practices — anytime, anywhere.",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.agileiq.app",
@@ -43,7 +49,8 @@
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
-          "color": "#1D9E75"
+          "color": "#1D9E75",
+          "iosDisplayInForeground": true
         }
       ],
     ],

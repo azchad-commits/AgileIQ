@@ -28,9 +28,14 @@ function today(): string {
   return new Date().toISOString().split('T')[0];
 }
 
+function safeParse<T>(raw: string | null, fallback: T): T {
+  if (!raw) return fallback;
+  try { return JSON.parse(raw) as T; } catch { return fallback; }
+}
+
 export async function checkAndIncrementDailyCount(limit = FREE_TIER_LIMIT): Promise<boolean> {
   const raw = await AsyncStorage.getItem(DAILY_COUNT_KEY);
-  const stored: DailyCount = raw ? JSON.parse(raw) : { date: today(), count: 0 };
+  const stored: DailyCount = safeParse<DailyCount>(raw, { date: today(), count: 0 });
 
   if (stored.date !== today()) {
     await AsyncStorage.setItem(DAILY_COUNT_KEY, JSON.stringify({ date: today(), count: 1 }));
@@ -49,14 +54,14 @@ export async function checkAndIncrementDailyCount(limit = FREE_TIER_LIMIT): Prom
 export async function getRemainingQuestions(limit = FREE_TIER_LIMIT): Promise<number> {
   const raw = await AsyncStorage.getItem(DAILY_COUNT_KEY);
   if (!raw) return limit;
-  const stored: DailyCount = JSON.parse(raw);
+  const stored: DailyCount = safeParse<DailyCount>(raw, { date: today(), count: 0 });
   if (stored.date !== today()) return limit;
   return Math.max(0, limit - stored.count);
 }
 
 export async function saveConversation(conversation: Conversation): Promise<void> {
   const raw = await AsyncStorage.getItem(CONVERSATIONS_KEY);
-  const list: Conversation[] = raw ? JSON.parse(raw) : [];
+  const list: Conversation[] = safeParse<Conversation[]>(raw, []);
   const idx = list.findIndex(c => c.id === conversation.id);
   if (idx >= 0) {
     list[idx] = conversation;
@@ -69,12 +74,12 @@ export async function saveConversation(conversation: Conversation): Promise<void
 
 export async function getConversations(): Promise<Conversation[]> {
   const raw = await AsyncStorage.getItem(CONVERSATIONS_KEY);
-  return raw ? JSON.parse(raw) : [];
+  return safeParse<Conversation[]>(raw, []);
 }
 
 export async function deleteConversation(id: string): Promise<void> {
   const raw = await AsyncStorage.getItem(CONVERSATIONS_KEY);
-  const list: Conversation[] = raw ? JSON.parse(raw) : [];
+  const list: Conversation[] = safeParse<Conversation[]>(raw, []);
   await AsyncStorage.setItem(
     CONVERSATIONS_KEY,
     JSON.stringify(list.filter(c => c.id !== id)),
@@ -87,7 +92,7 @@ export async function clearAllHistory(): Promise<void> {
 
 export async function renameConversation(id: string, title: string): Promise<void> {
   const raw = await AsyncStorage.getItem(CONVERSATIONS_KEY);
-  const list: Conversation[] = raw ? JSON.parse(raw) : [];
+  const list: Conversation[] = safeParse<Conversation[]>(raw, []);
   const idx = list.findIndex(c => c.id === id);
   if (idx >= 0) {
     list[idx] = { ...list[idx], title };
@@ -158,7 +163,7 @@ export async function setOnboardingSeen(): Promise<void> {
 
 export async function incrementAndGetConversationCount(): Promise<number> {
   const raw = await AsyncStorage.getItem(CONVERSATION_COUNT_KEY);
-  const count = raw ? parseInt(raw, 10) + 1 : 1;
+  const count = raw ? (parseInt(raw, 10) || 0) + 1 : 1;
   await AsyncStorage.setItem(CONVERSATION_COUNT_KEY, String(count));
   return count;
 }
@@ -175,7 +180,7 @@ const USER_PROFILE_KEY = 'user_profile';
 
 export async function getUserProfile(): Promise<UserProfile | null> {
   const raw = await AsyncStorage.getItem(USER_PROFILE_KEY);
-  return raw ? JSON.parse(raw) : null;
+  return safeParse<UserProfile | null>(raw, null);
 }
 
 export async function setUserProfile(profile: UserProfile): Promise<void> {
@@ -196,7 +201,7 @@ const MAX_FAVORITES = 100;
 
 export async function getFavorites(): Promise<Favorite[]> {
   const raw = await AsyncStorage.getItem(FAVORITES_KEY);
-  return raw ? JSON.parse(raw) : [];
+  return safeParse<Favorite[]>(raw, []);
 }
 
 export async function saveFavorite(fav: Favorite): Promise<void> {
@@ -230,7 +235,7 @@ function daysAgoStr(n: number): string {
 export async function getStreak(): Promise<number> {
   const raw = await AsyncStorage.getItem(STREAK_KEY);
   if (!raw) return 0;
-  const data: StreakData = JSON.parse(raw);
+  const data: StreakData = safeParse<StreakData>(raw, { lastDate: '', count: 0 });
   const t = today();
   // Show streak if active today, yesterday, or within grace window (2 days ago)
   if (data.lastDate === t || data.lastDate === daysAgoStr(1) || data.lastDate === daysAgoStr(2)) {
@@ -246,7 +251,7 @@ export async function updateStreak(): Promise<number> {
     await AsyncStorage.setItem(STREAK_KEY, JSON.stringify({ lastDate: t, count: 1 }));
     return 1;
   }
-  const data: StreakData = JSON.parse(raw);
+  const data: StreakData = safeParse<StreakData>(raw, { lastDate: '', count: 1 });
   if (data.lastDate === t) return data.count;
 
   let newCount: number;
@@ -279,7 +284,7 @@ const MAX_NOTES = 200;
 
 export async function getNotes(): Promise<Note[]> {
   const raw = await AsyncStorage.getItem(NOTES_KEY);
-  return raw ? JSON.parse(raw) : [];
+  return safeParse<Note[]>(raw, []);
 }
 
 export async function saveNote(note: Note): Promise<void> {
@@ -305,7 +310,7 @@ const PINNED_KEY = 'pinned_conversations';
 
 export async function getPinnedIds(): Promise<string[]> {
   const raw = await AsyncStorage.getItem(PINNED_KEY);
-  return raw ? JSON.parse(raw) : [];
+  return safeParse<string[]>(raw, []);
 }
 
 export async function togglePinConversation(id: string): Promise<boolean> {

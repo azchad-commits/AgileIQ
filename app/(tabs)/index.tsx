@@ -218,7 +218,7 @@ export default function ChatScreen() {
       setMessages(conv.messages.map((m, i) => ({ id: `${conv.id}-${i}`, role: m.role, content: m.content })));
       conversationId.current = conv.id;
       conversationTitleRef.current = conv.title;
-    });
+    }).catch(() => {});
   }, [continueId]);
 
   // Prompt param (from Topics, Tools, etc.)
@@ -244,10 +244,10 @@ export default function ChatScreen() {
 
   // Refresh tier status + restore draft on focus
   useFocusEffect(useCallback(() => {
-    refreshTierStatus();
+    refreshTierStatus().catch(() => {});
     AsyncStorage.getItem('chat_draft').then(draft => {
       if (draft && messagesRef.current.length === 0) setInput(draft);
-    });
+    }).catch(() => {});
     return () => { AsyncStorage.setItem('chat_draft', inputRef.current); };
   }, [refreshTierStatus]));
 
@@ -273,6 +273,7 @@ export default function ChatScreen() {
   const send = useCallback(async (text: string) => {
     const content = text.trim();
     if (!content || loadingRef.current) return;
+    loadingRef.current = true; // synchronous guard — prevents double-send before re-render
     retryContentRef.current = null;
     setIsOffline(false);
 
@@ -777,6 +778,12 @@ const MessageBubble = React.memo(function MessageBubble({
 }) {
   const isUser = message.role === 'user';
   const [speaking, setSpeaking] = React.useState(false);
+  const speakingRef = React.useRef(false);
+  speakingRef.current = speaking;
+
+  React.useEffect(() => () => {
+    if (speakingRef.current) Speech.stop();
+  }, []);
 
   const handleLongPress = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
