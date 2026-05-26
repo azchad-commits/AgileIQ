@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — AgileIQ</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #0F172A;
+      color: #CBD5E1;
+      line-height: 1.7;
+      padding: 40px 20px 80px;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    .logo { display: flex; align-items: baseline; gap: 2px; margin-bottom: 8px; }
+    .logo-main { font-size: 28px; font-weight: 800; color: #F8FAFC; letter-spacing: -0.5px; }
+    .logo-accent { color: #1D9E75; }
+    .logo-sub { font-size: 13px; color: #64748B; margin-left: 6px; letter-spacing: 0.3px; }
+    h1 { font-size: 26px; font-weight: 700; color: #F8FAFC; margin: 32px 0 6px; letter-spacing: -0.3px; }
+    .meta { font-size: 13px; color: #64748B; margin-bottom: 40px; }
+    h2 { font-size: 17px; font-weight: 700; color: #F8FAFC; margin: 36px 0 10px; }
+    p { margin-bottom: 14px; font-size: 15px; }
+    ul { margin: 10px 0 14px 20px; }
+    li { font-size: 15px; margin-bottom: 6px; }
+    a { color: #1D9E75; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .callout {
+      background: #1E293B;
+      border-left: 3px solid #1D9E75;
+      border-radius: 4px;
+      padding: 14px 18px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+    .divider { height: 1px; background: #1E293B; margin: 40px 0; }
+    footer { font-size: 13px; color: #475569; margin-top: 60px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">
+      <span class="logo-main">Agile<span class="logo-accent">IQ</span></span>
+      <span class="logo-sub">AI Agile Coach</span>
+    </div>
+
+    <h1>Privacy Policy</h1>
+    <p class="meta">Last updated: May 26, 2026</p>
+
+    <div class="callout">
+      AgileIQ is designed with privacy by default. We do not create user accounts, do not sell your data, and store your coaching history only on your device.
+    </div>
+
+    <h2>1. What Data We Collect</h2>
+    <p>AgileIQ collects minimal data to function:</p>
+    <ul>
+      <li><strong>Conversation history</strong> — stored locally on your device using AsyncStorage. Never uploaded to our servers.</li>
+      <li><strong>App preferences</strong> — response style, role profile, notification settings, and streak data are stored locally on your device only.</li>
+      <li><strong>API key (optional)</strong> — if you provide your own Anthropic API key, it is stored in your device's secure enclave (iOS Keychain / Android Keystore) using Expo SecureStore. It is never transmitted to AgileIQ servers.</li>
+      <li><strong>Photos (optional)</strong> — if you use the Board Analysis feature, you select a photo from your library or camera. The image is sent directly to the Anthropic API for analysis and is not stored by AgileIQ.</li>
+    </ul>
+
+    <h2>2. Data We Do Not Collect</h2>
+    <ul>
+      <li>No account creation or registration is required.</li>
+      <li>We do not collect your name, email address, or any personally identifiable information.</li>
+      <li>We do not use analytics SDKs, crash reporters, or advertising SDKs that track you across apps.</li>
+      <li>We do not sell, rent, or share your data with third parties for marketing purposes.</li>
+    </ul>
+
+    <h2>3. Third-Party Services</h2>
+
+    <p><strong>Anthropic API</strong><br>
+    When you send a message, your question and recent conversation context are transmitted to the Anthropic API to generate a coaching response. Anthropic's privacy practices are governed by their <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>. We recommend reviewing it. Anthropic does not use your API conversations to train their models by default (see their usage policies for details).</p>
+
+    <p><strong>RevenueCat</strong><br>
+    If you subscribe to AgileIQ Pro, your purchase is processed through Apple App Store or Google Play. RevenueCat is used to verify and manage subscription entitlements. RevenueCat may collect a device identifier for subscription tracking. Their privacy practices are governed by the <a href="https://www.revenuecat.com/privacy" target="_blank" rel="noopener">RevenueCat Privacy Policy</a>.</p>
+
+    <p><strong>Apple App Store / Google Play</strong><br>
+    Purchases are handled entirely by Apple or Google. AgileIQ does not receive or store your payment information. Apple and Google's privacy policies govern their respective payment flows.</p>
+
+    <h2>4. Permissions We Request</h2>
+    <ul>
+      <li><strong>Camera &amp; Photo Library</strong> — used only when you choose to use the Board Analysis feature to photograph or upload an Agile board. We do not access your camera or photos at any other time.</li>
+      <li><strong>Notifications</strong> — used only to send optional daily coaching tips. You can disable this at any time in your device Settings. We do not send marketing notifications.</li>
+    </ul>
+
+    <h2>5. Data Storage and Security</h2>
+    <p>All conversation history, notes, and preferences are stored locally on your device. No AgileIQ server ever receives or stores your coaching conversations.</p>
+    <p>Your API key (if provided) is stored in the platform's secure credential store — the iOS Keychain or Android Keystore — which is hardware-backed on supported devices and cannot be accessed by other apps.</p>
+    <p>You can delete all locally stored data at any time by using the "Clear History" option in the app, or by uninstalling AgileIQ.</p>
+
+    <h2>6. Children's Privacy</h2>
+    <p>AgileIQ is not directed at children under the age of 13 (or 16 in some jurisdictions). We do not knowingly collect personal information from children. If you believe a child has used the app in a way that raises privacy concerns, please contact us.</p>
+
+    <h2>7. Changes to This Policy</h2>
+    <p>We may update this Privacy Policy from time to time. When we do, we will update the "Last updated" date at the top. Continued use of the app after any changes constitutes your acceptance of the updated policy.</p>
+
+    <h2>8. Contact</h2>
+    <p>If you have questions about this Privacy Policy, please contact us at:</p>
+    <p><a href="mailto:chadmfrank@gmail.com">chadmfrank@gmail.com</a></p>
+
+    <div class="divider"></div>
+
+    <footer>
+      &copy; 2026 AgileIQ. All rights reserved.
+    </footer>
+  </div>
+</body>
+</html>
