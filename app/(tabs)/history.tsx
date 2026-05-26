@@ -22,6 +22,7 @@ import * as Haptics from 'expo-haptics';
 import { Colors } from '../../constants/colors';
 import {
   getConversations,
+  saveConversation,
   deleteConversation,
   clearAllHistory,
   getFavorites,
@@ -450,9 +451,11 @@ export default function HistoryScreen() {
     if (undoItem.type === 'conv') {
       const conv = undoItem.snapshot as Conversation;
       setConversations(prev => [conv, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+      saveConversation(conv);
     } else {
       const note = undoItem.snapshot as Note;
       setNotes(prev => [note, ...prev].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()));
+      saveNote(note);
     }
     setUndoItem(null);
   };
@@ -465,6 +468,12 @@ export default function HistoryScreen() {
         text: 'Clear All',
         style: 'destructive',
         onPress: async () => {
+          if (undoTimerRef.current) {
+            clearTimeout(undoTimerRef.current);
+            undoTimerRef.current = null;
+            pendingDeleteRef.current = null;
+          }
+          setUndoItem(null);
           await clearAllHistory();
           setConversations([]);
         },

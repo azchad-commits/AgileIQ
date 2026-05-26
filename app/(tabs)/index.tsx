@@ -282,6 +282,7 @@ export default function ChatScreen() {
     const apiKey = byokKey ?? appKey;
 
     if (!apiKey) {
+      loadingRef.current = false;
       setError('No API key configured. Please add your Anthropic API key in Settings.');
       return;
     }
@@ -295,7 +296,10 @@ export default function ChatScreen() {
       if (!allowed) {
         if (!pro) {
           const upgraded = await presentProPaywall();
-          if (!upgraded) return;
+          if (!upgraded) {
+            loadingRef.current = false;
+            return;
+          }
           // Upgrade succeeded — retry with Pro limit and continue sending
           setIsPro(true);
           isProRef.current = true;
@@ -303,11 +307,13 @@ export default function ChatScreen() {
           limit = PRO_TIER_LIMIT;
           allowed = await checkAndIncrementDailyCount(limit);
           if (!allowed) {
+            loadingRef.current = false;
             setError(`You've reached your ${PRO_TIER_LIMIT} question limit for today. Come back tomorrow!`);
             return;
           }
           setRemaining(await getRemainingQuestions(PRO_TIER_LIMIT));
         } else {
+          loadingRef.current = false;
           setError(`You've reached your ${PRO_TIER_LIMIT} question limit for today. Come back tomorrow!`);
           return;
         }
