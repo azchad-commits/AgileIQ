@@ -86,7 +86,7 @@ export default function ConversationDetailScreen() {
     setSummaryVisible(true);
     try {
       const transcript = conversation!.messages
-        .map(m => `${m.role === 'user' ? 'User' : 'AgileIQ'}: ${m.content}`)
+        .map(m => `${m.role === 'user' ? 'User' : 'AgileCoachIQ'}: ${m.content}`)
         .join('\n\n');
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -100,7 +100,7 @@ export default function ConversationDetailScreen() {
           max_tokens: 512,
           messages: [{
             role: 'user',
-            content: `Summarize the key coaching insights and action items from this AgileIQ conversation in 4–5 concise bullet points. Focus on what was learned and what to do next.\n\n${transcript}`,
+            content: `Summarize the key coaching insights and action items from this AgileCoachIQ conversation in 4–5 concise bullet points. Focus on what was learned and what to do next.\n\n${transcript}`,
           }],
         }),
       });
@@ -119,7 +119,7 @@ export default function ConversationDetailScreen() {
         text: 'Share as Text',
         onPress: async () => {
           const text = conversation.messages
-            .map(m => `${m.role === 'user' ? 'You' : 'AgileIQ'}: ${m.content}`)
+            .map(m => `${m.role === 'user' ? 'You' : 'AgileCoachIQ'}: ${m.content}`)
             .join('\n\n');
           await Share.share({ message: `${conversation.title}\n\n${text}` });
         },
@@ -134,7 +134,7 @@ export default function ConversationDetailScreen() {
             ...conversation.messages.map(m =>
               m.role === 'user'
                 ? `**You:** ${m.content}`
-                : `**AgileIQ:** ${m.content}`
+                : `**AgileCoachIQ:** ${m.content}`
             ),
           ];
           await Share.share({ message: lines.join('\n\n'), title: conversation.title });
@@ -275,7 +275,7 @@ function DetailBubble({ role, content, onCopy }: { role: 'user' | 'assistant'; c
       style={[styles.bubbleRow, isUser && styles.bubbleRowUser]}
     >
       <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
-        {!isUser && <Text style={styles.senderLabel}>AgileIQ</Text>}
+        {!isUser && <Text style={styles.senderLabel}>AgileCoachIQ</Text>}
         {isUser ? (
           <Text style={styles.bubbleTextUser}>{content}</Text>
         ) : (

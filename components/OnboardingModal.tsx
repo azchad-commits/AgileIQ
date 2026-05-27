@@ -16,7 +16,7 @@ const FRAMEWORKS = ['Scrum', 'SAFe', 'Kanban', 'LeSS', 'Spotify', 'Other'];
 const PAGES = [
   {
     icon: '🎯',
-    title: 'Welcome to AgileIQ',
+    title: 'Welcome to AgileCoachIQ',
     body: 'Your personal AI Agile coach — instant answers about Scrum, SAFe, sprint planning, retrospectives, and team dynamics.',
   },
   {
@@ -27,7 +27,7 @@ const PAGES = [
   {
     icon: '🧑‍💼',
     title: 'Personalize your coaching',
-    body: 'Tell AgileIQ about yourself so every response is tailored to your role.',
+    body: 'Tell AgileCoachIQ about yourself so every response is tailored to your role.',
     isProfile: true,
   },
 ];

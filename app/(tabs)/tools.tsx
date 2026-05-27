@@ -752,7 +752,7 @@ function OKRBuilderSheet({ visible, onClose }: { visible: boolean; onClose: () =
         style={[f.textArea, { minHeight: 80 }]}
         value={keyResults}
         onChangeText={setKeyResults}
-        placeholder="Paste any draft KRs — AgileIQ will refine them…"
+        placeholder="Paste any draft KRs — AgileCoachIQ will refine them…"
         placeholderTextColor={Colors.grayDark}
         multiline
         maxLength={400}
@@ -1480,7 +1480,7 @@ export default function ToolsScreen() {
         <ToolCard
           icon="🧑‍💼"
           title="Coaching Session"
-          description="AgileIQ asks YOU questions first, then coaches you through your toughest challenge"
+          description="AgileCoachIQ asks YOU questions first, then coaches you through your toughest challenge"
           onPress={startCoachingSession}
         />
 

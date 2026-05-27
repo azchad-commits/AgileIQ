@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "AgileIQ",
+    "name": "AgileCoachIQ",
     "slug": "AgileIQ",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "agileiq",
+    "scheme": "agilecoachiq",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0F172A",
     "description": "AI-powered Agile and Scrum coaching. Get expert guidance on Scrum, SAFe, Kanban, and Agile best practices — anytime, anywhere.",
@@ -16,13 +16,13 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.agileiq.app",
+      "bundleIdentifier": "com.agilecoachiq.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.agileiq.app",
+      "package": "com.agilecoachiq.app",
       "adaptiveIcon": {
         "backgroundColor": "#0F172A",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -41,8 +41,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "AgileIQ needs access to your photos to analyze project boards and roadmaps.",
-          "cameraPermission": "AgileIQ needs camera access to photograph your Agile boards for analysis."
+          "photosPermission": "AgileCoachIQ needs access to your photos to analyze project boards and roadmaps.",
+          "cameraPermission": "AgileCoachIQ needs camera access to photograph your Agile boards for analysis."
         }
       ],
       [
@@ -52,13 +52,14 @@
           "color": "#1D9E75",
           "iosDisplayInForeground": true
         }
-      ],
+      ]
     ],
     "extra": {
       "router": {},
       "eas": {
         "projectId": "353f26f8-036d-4679-901b-656c7ea38e48"
       }
-    }
+    },
+    "owner": "azchad"
   }
 }

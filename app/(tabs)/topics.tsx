@@ -154,7 +154,7 @@ export default function TopicsScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Topics</Text>
-        <Text style={styles.headerSub}>Tap a question to ask AgileIQ</Text>
+        <Text style={styles.headerSub}>Tap a question to ask AgileCoachIQ</Text>
       </View>
 
       <View style={styles.searchWrapper}>

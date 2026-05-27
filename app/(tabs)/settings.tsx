@@ -123,7 +123,7 @@ export default function SettingsScreen() {
   };
 
   const handleDeleteKey = () => {
-    Alert.alert('Remove API key?', 'You will need to re-enter it to use AgileIQ.', [
+    Alert.alert('Remove API key?', 'You will need to re-enter it to use AgileCoachIQ.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
@@ -156,7 +156,7 @@ export default function SettingsScreen() {
   const handleShareApp = async () => {
     try {
       await Share.share({
-        message: 'Check out AgileIQ — an AI Agile coach for Scrum Masters, Coaches, and Product Owners. It answers any Agile question instantly.',
+        message: 'Check out AgileCoachIQ — an AI Agile coach for Scrum Masters, Coaches, and Product Owners. It answers any Agile question instantly.',
       });
     } catch {}
   };
@@ -189,7 +189,7 @@ export default function SettingsScreen() {
               <>
                 <View style={styles.planRow}>
                   <View>
-                    <Text style={styles.planTitle}>AgileIQ Pro ✦</Text>
+                    <Text style={styles.planTitle}>AgileCoachIQ Pro ✦</Text>
                     <Text style={styles.planSub}>{PRO_TIER_LIMIT} questions/day · $9.99/month</Text>
                   </View>
                 </View>
@@ -289,7 +289,7 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>COACHING CONTEXT</Text>
           <Text style={styles.sectionHint}>
-            Describe your role and team so AgileIQ tailors every response to your situation.
+            Describe your role and team so AgileCoachIQ tailors every response to your situation.
           </Text>
           <View style={styles.card}>
             <TextInput
@@ -310,7 +310,7 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>COACHING PROFILE</Text>
           <Text style={styles.sectionHint}>
-            Tell AgileIQ about your role and experience for more relevant coaching.
+            Tell AgileCoachIQ about your role and experience for more relevant coaching.
           </Text>
           <View style={styles.card}>
             <View style={styles.profileSection}>
@@ -367,7 +367,7 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>RESPONSE STYLE</Text>
           <Text style={styles.sectionHint}>
-            Control how detailed AgileIQ's answers are.
+            Control how detailed AgileCoachIQ's answers are.
           </Text>
           <View style={styles.card}>
             <View style={styles.profileSection}>
@@ -416,7 +416,7 @@ export default function SettingsScreen() {
           <Text style={styles.sectionLabel}>SHARE</Text>
           <View style={styles.card}>
             <TouchableOpacity style={styles.infoRow} onPress={handleShareApp} activeOpacity={0.7}>
-              <Text style={styles.infoLabel}>Share AgileIQ with a Friend</Text>
+              <Text style={styles.infoLabel}>Share AgileCoachIQ with a Friend</Text>
               <Text style={styles.infoChevron}>↑</Text>
             </TouchableOpacity>
           </View>
@@ -426,7 +426,7 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>ABOUT</Text>
           <View style={styles.card}>
-            <Row label="App" value="AgileIQ" />
+            <Row label="App" value="AgileCoachIQ" />
             <View style={styles.divider} />
             <Row label="Version" value={Constants.expoConfig?.version ?? '1.0.0'} />
             <View style={styles.divider} />

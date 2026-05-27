@@ -1,11 +1,11 @@
-# AgileIQ — Marketing Materials
+# AgileCoachIQ — Marketing Materials
 
 ---
 
 ## APP STORE LISTING
 
 ### App Name
-AgileIQ — AI Agile Coach
+AgileCoachIQ — AI Agile Coach
 
 ### Subtitle (30 chars max)
 Scrum, SAFe & Agile Coaching
@@ -15,14 +15,14 @@ The AI coach in your pocket. Ask anything about Scrum, SAFe, or Agile — get ex
 
 ### App Store Description (4000 chars max)
 
-AgileIQ is the AI-powered Agile coaching app built for practitioners who want expert guidance without waiting for a consultant, a course, or a Slack reply.
+AgileCoachIQ is the AI-powered Agile coaching app built for practitioners who want expert guidance without waiting for a consultant, a course, or a Slack reply.
 
-Whether you're a Scrum Master navigating team dysfunction, a Product Owner shaping a roadmap, or an Agile Coach preparing a retrospective — AgileIQ gives you a knowledgeable partner available the moment you need it.
+Whether you're a Scrum Master navigating team dysfunction, a Product Owner shaping a roadmap, or an Agile Coach preparing a retrospective — AgileCoachIQ gives you a knowledgeable partner available the moment you need it.
 
 ---
 
 **ASK ANYTHING ABOUT AGILE**
-Get expert answers on Scrum, SAFe, Kanban, Lean, and coaching — grounded in the 2020 Scrum Guide, Coaching Agile Teams, Management 3.0, SAFe DevOps Workbook, and more. AgileIQ doesn't give generic answers. It knows you're a practitioner and responds accordingly.
+Get expert answers on Scrum, SAFe, Kanban, Lean, and coaching — grounded in the 2020 Scrum Guide, Coaching Agile Teams, Management 3.0, SAFe DevOps Workbook, and more. AgileCoachIQ doesn't give generic answers. It knows you're a practitioner and responds accordingly.
 
 **15+ GUIDED TOOLS**
 Stop staring at a blank screen. Use structured tools that ask the right questions, then generate tailored AI coaching output:
@@ -39,19 +39,19 @@ Stop staring at a blank screen. Use structured tools that ask the right question
 • Stakeholder Update — Clear, outcome-led updates for any audience
 • Roadmap Builder — Shape your product narrative with outcome themes and sequencing
 • Research Synthesis — Turn raw user feedback into patterns, insights, and actions
-• 1-on-1 Coaching Session — AgileIQ asks YOU questions first, then coaches you through your toughest challenge
+• 1-on-1 Coaching Session — AgileCoachIQ asks YOU questions first, then coaches you through your toughest challenge
 • Board Analysis — Upload a photo of your Jira or Kanban board for real-time coaching feedback
 • Ceremony Timer — Timebox standups, planning, retros, and refinement with preset durations
 
 **CERTIFICATION PREP**
-Preparing for your next credential? AgileIQ generates practice questions, concept reviews, weak-spot quizzes, and full 10-question mock exams for:
+Preparing for your next credential? AgileCoachIQ generates practice questions, concept reviews, weak-spot quizzes, and full 10-question mock exams for:
 PSM I · PSM II · PSPO I · SAFe Agilist · CSM · CSPO
 
 **BROWSE BY TOPIC**
 Not sure what to ask? Browse curated questions across six knowledge areas — Scrum, SAFe, Coaching, Ceremonies, Metrics, and Lean — and jump straight into a coaching conversation.
 
 **PERSONALIZED TO YOUR ROLE**
-Tell AgileIQ your role, team maturity, and primary framework. Every response is automatically tailored to your context — a Scrum Master coaching a new team gets different guidance than an Enterprise Agile Coach running a transformation.
+Tell AgileCoachIQ your role, team maturity, and primary framework. Every response is automatically tailored to your context — a Scrum Master coaching a new team gets different guidance than an Enterprise Agile Coach running a transformation.
 
 **SAVES YOUR WORK**
 Every conversation is saved and searchable. Pin your most important threads, save standout responses to Favorites, and jot ideas in Sprint Notes.
@@ -78,7 +78,7 @@ AI Agile coach for Scrum Masters, Product Owners & Agile teams.
 
 ### Full Description
 
-AgileIQ is an AI-powered Agile and Scrum coaching app for practitioners who want expert guidance on demand.
+AgileCoachIQ is an AI-powered Agile and Scrum coaching app for practitioners who want expert guidance on demand.
 
 Ask anything about Scrum, SAFe, Kanban, Lean, or Agile coaching — and get answers grounded in the 2020 Scrum Guide, Coaching Agile Teams, Management 3.0, and the SAFe framework.
 
@@ -106,7 +106,7 @@ Pro: $9.99/month, unlimited
 
 Most Scrum Masters don't have a coach in their corner. They have a Google search and a meeting in 10 minutes.
 
-That's why I built AgileIQ.
+That's why I built AgileCoachIQ.
 
 It's an AI-powered Agile coaching app for Scrum Masters, Product Owners, Agile Coaches, and teams — available the moment you need it, on your phone.
 
@@ -139,7 +139,7 @@ Free to try 👇
 
 Stop prepping ceremonies from scratch.
 
-AgileIQ's guided tools do the setup work for you:
+AgileCoachIQ's guided tools do the setup work for you:
 
 → Sprint Planner: capacity + goal → focused plan
 → Retro Facilitator: format, timebox, action guidance
@@ -157,7 +157,7 @@ Tell it your context. Get tailored coaching output.
 
 Studying for your PSM I, CSPO, or SAFe cert?
 
-AgileIQ generates:
+AgileCoachIQ generates:
 • Realistic practice questions with answer explanations
 • Concept reviews for the 8–10 must-know areas
 • Weak-spot quizzes on commonly failed topics
@@ -173,7 +173,7 @@ Covers: PSM I · PSM II · PSPO I · SAFe SA · CSM · CSPO
 
 Most coaching tools give you answers.
 
-AgileIQ's Coaching Session asks YOU questions first.
+AgileCoachIQ's Coaching Session asks YOU questions first.
 
 It surfaces assumptions, reframes the problem, and then coaches you through it — the way a real Agile coach would.
 
@@ -200,7 +200,7 @@ Your AI Agile coach. On your phone. Available now.
 ## FEATURE HIGHLIGHTS (for website/landing page)
 
 ### For Scrum Masters
-Handle team dysfunction, run better ceremonies, coach without giving the answer, remove impediments that aren't yours to own — AgileIQ has seen it all and knows what actually works.
+Handle team dysfunction, run better ceremonies, coach without giving the answer, remove impediments that aren't yours to own — AgileCoachIQ has seen it all and knows what actually works.
 
 ### For Product Owners
 Write sharper acceptance criteria, build a compelling Product Goal, say no to stakeholders without damaging trust, and prioritize a backlog that actually reflects product strategy.

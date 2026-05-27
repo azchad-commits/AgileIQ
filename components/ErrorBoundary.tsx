@@ -17,7 +17,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[AgileIQ] Unhandled error:', error.message, info.componentStack);
+    console.error('[AgileCoachIQ] Unhandled error:', error.message, info.componentStack);
   }
 
   render() {
@@ -26,7 +26,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
         <View style={s.container}>
           <Text style={s.icon}>⚠️</Text>
           <Text style={s.title}>Something went wrong</Text>
-          <Text style={s.message}>AgileIQ ran into an unexpected error. Your conversations are safe.</Text>
+          <Text style={s.message}>AgileCoachIQ ran into an unexpected error. Your conversations are safe.</Text>
           <TouchableOpacity
             style={s.btn}
             onPress={() => this.setState({ hasError: false })}

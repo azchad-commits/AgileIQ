@@ -603,7 +603,7 @@ export default function HistoryScreen() {
               <View style={styles.empty}>
                 <Text style={styles.emptyTitle}>{query.trim() ? 'No results' : 'No conversations yet'}</Text>
                 <Text style={styles.emptySub}>
-                  {query.trim() ? 'Try a different search term.' : 'Your past chats with AgileIQ will appear here.'}
+                  {query.trim() ? 'Try a different search term.' : 'Your past chats with AgileCoachIQ will appear here.'}
                 </Text>
               </View>
             }
@@ -653,7 +653,7 @@ export default function HistoryScreen() {
               <View style={styles.empty}>
                 <Text style={styles.emptyTitle}>{savedQuery.trim() ? 'No results' : 'No saved responses'}</Text>
                 <Text style={styles.emptySub}>
-                  {savedQuery.trim() ? 'Try a different search term.' : 'Tap "Save" on any AgileIQ response to bookmark it here.'}
+                  {savedQuery.trim() ? 'Try a different search term.' : 'Tap "Save" on any AgileCoachIQ response to bookmark it here.'}
                 </Text>
               </View>
             }

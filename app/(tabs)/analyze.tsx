@@ -24,7 +24,7 @@ import { presentProPaywall } from '../../services/revenueCat';
 import { friendlyApiError } from '../../services/apiErrors';
 
 const ANALYSIS_SYSTEM_PROMPT =
-  'You are AgileIQ, an expert Agile coach. The user has shared a screenshot — a Jira board, project plan, sprint roadmap, backlog, or team report. Analyze it and provide specific, actionable coaching recommendations. Reference concrete details from the image. Use headers to organize your response.';
+  'You are AgileCoachIQ, an expert Agile coach. The user has shared a screenshot — a Jira board, project plan, sprint roadmap, backlog, or team report. Analyze it and provide specific, actionable coaching recommendations. Reference concrete details from the image. Use headers to organize your response.';
 
 const QUICK_PROMPTS = [
   'Identify Agile anti-patterns and how to fix them',
@@ -232,7 +232,7 @@ export default function AnalyzeScreen() {
                   <Text style={styles.resultThumbName} numberOfLines={2}>{image.name}</Text>
                 </View>
               )}
-              <Text style={styles.resultLabel}>AgileIQ Analysis</Text>
+              <Text style={styles.resultLabel}>AgileCoachIQ Analysis</Text>
               <Markdown style={markdownStyles}>{result ?? ''}</Markdown>
             </View>
           </TouchableOpacity>
@@ -389,7 +389,7 @@ export default function AnalyzeScreen() {
             >
               {loading
                 ? <ActivityIndicator size="small" color={Colors.white} />
-                : <Text style={styles.analyzeBtnText}>Analyze with AgileIQ</Text>
+                : <Text style={styles.analyzeBtnText}>Analyze with AgileCoachIQ</Text>
               }
             </TouchableOpacity>
 

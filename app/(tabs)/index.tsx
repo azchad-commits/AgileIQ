@@ -73,12 +73,12 @@ function buildContextWindow(
   ];
 }
 // Fill in once the app is submitted to the App Store
-const APP_STORE_ID = '';
+const APP_STORE_ID = '6773523962';
 
 function promptAppRating() {
   if (!APP_STORE_ID) return;
   Alert.alert(
-    'Enjoying AgileIQ?',
+    'Enjoying AgileCoachIQ?',
     'Would you like to leave a review? It really helps!',
     [
       { text: 'Not now', style: 'cancel' },
@@ -87,7 +87,7 @@ function promptAppRating() {
         onPress: () => {
           const url = Platform.OS === 'ios'
             ? `itms-apps://itunes.apple.com/app/id${APP_STORE_ID}?action=write-review`
-            : 'market://details?id=com.agileiq.app';
+            : 'market://details?id=com.agilecoachiq.app';
           Linking.openURL(url).catch(() => {});
         },
       },
@@ -176,8 +176,6 @@ export default function ChatScreen() {
   const listRef = useRef<FlatList>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const conversationSummaryRef = useRef<string | null>(null);
-  const isSpeakingRef = useRef(false);
-
   // Ref mirrors — updated every render so `send` (stable []) always sees current values
   const messagesRef = useRef<Message[]>([]);
   const loadingRef = useRef(false);
@@ -538,7 +536,7 @@ export default function ChatScreen() {
   ) => {
     try {
       const transcript = oldMessages
-        .map(m => `${m.role === 'user' ? 'User' : 'AgileIQ'}: ${m.content}`)
+        .map(m => `${m.role === 'user' ? 'User' : 'AgileCoachIQ'}: ${m.content}`)
         .join('\n\n');
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -588,7 +586,7 @@ export default function ChatScreen() {
       <View style={styles.header}>
         <View style={styles.headerWordmark}>
           <Text style={styles.wordmarkMain}>
-            Agile<Text style={styles.wordmarkAccent}>IQ</Text>
+            AgileCoach<Text style={styles.wordmarkAccent}>IQ</Text>
           </Text>
           <Text style={styles.wordmarkSub}>AI Agile Coach</Text>
         </View>
@@ -835,7 +833,7 @@ const MessageBubble = React.memo(function MessageBubble({
       <View style={styles.bubbleWrap}>
         <TouchableOpacity onLongPress={handleLongPress} activeOpacity={0.85}>
           <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
-            {!isUser && <Text style={styles.senderLabel}>AgileIQ</Text>}
+            {!isUser && <Text style={styles.senderLabel}>AgileCoachIQ</Text>}
             {isUser ? (
               <Text style={styles.bubbleTextUser}>{message.content}</Text>
             ) : isStreaming && !message.content ? (
@@ -908,7 +906,7 @@ function EmptyState({ onSuggestion, profile }: { onSuggestion: (text: string) =>
       </View>
       <Text style={styles.emptyTitle}>{greeting}</Text>
       <Text style={styles.emptySub}>
-        I'm AgileIQ. Ask me anything about Scrum, SAFe, coaching, sprints, and more.
+        I'm AgileCoachIQ. Ask me anything about Scrum, SAFe, coaching, sprints, and more.
       </Text>
       <TipCard tip={getTodaysTip()} onAsk={onSuggestion} />
       {suggestions.map(s => (

@@ -63,7 +63,7 @@ export async function scheduleDailyTip(): Promise<void> {
   await Notifications.scheduleNotificationAsync({
     identifier: NOTIFICATION_ID,
     content: {
-      title: 'AgileIQ Daily Tip',
+      title: 'AgileCoachIQ Daily Tip',
       body: tip,
       data: { tipPrompt: `Tell me more about this coaching insight: "${tip}"` },
     },
