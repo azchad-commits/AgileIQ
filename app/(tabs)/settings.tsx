@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Switch,
   Share,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -21,6 +22,9 @@ import { getUserContext, setUserContext as saveUserContext, getIsPro, FREE_TIER_
 import { requestNotificationPermissions, scheduleDailyTip, cancelDailyTip } from '../../services/notifications';
 import { syncProStatus, presentProPaywall, restorePurchases } from '../../services/revenueCat';
 import { OnboardingModal } from '../../components/OnboardingModal';
+
+const PRIVACY_POLICY_URL = 'https://azchad-commits.github.io/AgileIQ/privacy-policy.html';
+const TERMS_URL = 'https://azchad-commits.github.io/AgileIQ/terms-of-use.html';
 
 export default function SettingsScreen() {
   const [apiKey, setApiKeyState] = useState('');
@@ -190,7 +194,7 @@ export default function SettingsScreen() {
                 <View style={styles.planRow}>
                   <View>
                     <Text style={styles.planTitle}>AgileCoachIQ Pro ✦</Text>
-                    <Text style={styles.planSub}>{PRO_TIER_LIMIT} questions/day · $9.99/month</Text>
+                    <Text style={styles.planSub}>{PRO_TIER_LIMIT} questions/day · 1-month subscription · $9.99/month</Text>
                   </View>
                 </View>
                 <View style={styles.divider} />
@@ -199,6 +203,16 @@ export default function SettingsScreen() {
                     ? <ActivityIndicator size="small" color={Colors.teal} />
                     : <Text style={styles.planActionText}>Restore Purchases</Text>}
                 </TouchableOpacity>
+                <View style={styles.divider} />
+                <View style={styles.legalRow}>
+                  <TouchableOpacity onPress={() => Linking.openURL(TERMS_URL)} activeOpacity={0.7}>
+                    <Text style={styles.legalLink}>Terms of Use</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.legalSep}>·</Text>
+                  <TouchableOpacity onPress={() => Linking.openURL(PRIVACY_POLICY_URL)} activeOpacity={0.7}>
+                    <Text style={styles.legalLink}>Privacy Policy</Text>
+                  </TouchableOpacity>
+                </View>
               </>
             ) : (
               <>
@@ -209,6 +223,10 @@ export default function SettingsScreen() {
                   </View>
                 </View>
                 <View style={styles.divider} />
+                <View style={styles.proInfo}>
+                  <Text style={styles.proInfoTitle}>AgileCoachIQ Pro</Text>
+                  <Text style={styles.proInfoDetail}>1-month subscription · auto-renews at $9.99/month</Text>
+                </View>
                 <TouchableOpacity style={styles.upgradeBtn} onPress={handleUpgrade} disabled={upgrading} activeOpacity={0.85}>
                   {upgrading
                     ? <ActivityIndicator size="small" color={Colors.white} />
@@ -219,6 +237,16 @@ export default function SettingsScreen() {
                     ? <ActivityIndicator size="small" color={Colors.teal} />
                     : <Text style={styles.planActionText}>Restore Purchases</Text>}
                 </TouchableOpacity>
+                <View style={styles.divider} />
+                <View style={styles.legalRow}>
+                  <TouchableOpacity onPress={() => Linking.openURL(TERMS_URL)} activeOpacity={0.7}>
+                    <Text style={styles.legalLink}>Terms of Use</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.legalSep}>·</Text>
+                  <TouchableOpacity onPress={() => Linking.openURL(PRIVACY_POLICY_URL)} activeOpacity={0.7}>
+                    <Text style={styles.legalLink}>Privacy Policy</Text>
+                  </TouchableOpacity>
+                </View>
               </>
             )}
           </View>
@@ -434,6 +462,22 @@ export default function SettingsScreen() {
             <View style={styles.divider} />
             <TouchableOpacity style={styles.infoRow} onPress={() => setShowIntro(true)} activeOpacity={0.7}>
               <Text style={styles.infoLabel}>How to Use</Text>
+              <Text style={styles.infoChevron}>›</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Legal */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>LEGAL</Text>
+          <View style={styles.card}>
+            <TouchableOpacity style={styles.infoRow} onPress={() => Linking.openURL(PRIVACY_POLICY_URL)} activeOpacity={0.7}>
+              <Text style={styles.infoLabel}>Privacy Policy</Text>
+              <Text style={styles.infoChevron}>›</Text>
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.infoRow} onPress={() => Linking.openURL(TERMS_URL)} activeOpacity={0.7}>
+              <Text style={styles.infoLabel}>Terms of Use</Text>
               <Text style={styles.infoChevron}>›</Text>
             </TouchableOpacity>
           </View>
@@ -697,4 +741,35 @@ const styles = StyleSheet.create({
   notifText: { flex: 1, marginRight: 12 },
   notifLabel: { fontSize: 15, color: Colors.text, fontWeight: '500' },
   notifSub: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
+  proInfo: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  proInfoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.teal,
+    marginBottom: 2,
+  },
+  proInfoDetail: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginBottom: 10,
+  },
+  legalRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 8,
+  },
+  legalLink: {
+    fontSize: 13,
+    color: Colors.teal,
+  },
+  legalSep: {
+    fontSize: 13,
+    color: Colors.grayDark,
+  },
 });
