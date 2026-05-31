@@ -205,11 +205,11 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
                 <View style={styles.divider} />
                 <View style={styles.legalRow}>
-                  <TouchableOpacity onPress={() => Linking.openURL(TERMS_URL)} activeOpacity={0.7}>
+                  <TouchableOpacity onPress={() => Linking.openURL(TERMS_URL)} activeOpacity={0.7} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                     <Text style={styles.legalLink}>Terms of Use</Text>
                   </TouchableOpacity>
                   <Text style={styles.legalSep}>·</Text>
-                  <TouchableOpacity onPress={() => Linking.openURL(PRIVACY_POLICY_URL)} activeOpacity={0.7}>
+                  <TouchableOpacity onPress={() => Linking.openURL(PRIVACY_POLICY_URL)} activeOpacity={0.7} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                     <Text style={styles.legalLink}>Privacy Policy</Text>
                   </TouchableOpacity>
                 </View>
@@ -239,11 +239,11 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
                 <View style={styles.divider} />
                 <View style={styles.legalRow}>
-                  <TouchableOpacity onPress={() => Linking.openURL(TERMS_URL)} activeOpacity={0.7}>
+                  <TouchableOpacity onPress={() => Linking.openURL(TERMS_URL)} activeOpacity={0.7} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                     <Text style={styles.legalLink}>Terms of Use</Text>
                   </TouchableOpacity>
                   <Text style={styles.legalSep}>·</Text>
-                  <TouchableOpacity onPress={() => Linking.openURL(PRIVACY_POLICY_URL)} activeOpacity={0.7}>
+                  <TouchableOpacity onPress={() => Linking.openURL(PRIVACY_POLICY_URL)} activeOpacity={0.7} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                     <Text style={styles.legalLink}>Privacy Policy</Text>
                   </TouchableOpacity>
                 </View>
