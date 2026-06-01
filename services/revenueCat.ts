@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import { setIsPro } from './storage';
 
 // Add your keys from app.revenuecat.com → Project Settings → API Keys
-const RC_IOS_KEY = 'app866648afca';
+const RC_IOS_KEY = 'test_nwxOnjRRreLIzmRbKcjnvEtbrTL';
 const RC_ANDROID_KEY = '';
 const PRO_ENTITLEMENT_ID = 'pro';
 
@@ -18,7 +18,7 @@ function isConfigured(): boolean {
 
 export function initializePurchases(): void {
   if (!isConfigured()) return;
-  Purchases.setLogLevel(LOG_LEVEL.WARN);
+  Purchases.setLogLevel(LOG_LEVEL.DEBUG);
   Purchases.configure({ apiKey: getApiKey() });
 }
 
@@ -59,7 +59,8 @@ export async function presentProPaywall(): Promise<boolean> {
     const purchased = result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
     if (purchased) await setIsPro(true);
     return purchased;
-  } catch {
+  } catch (e: any) {
+    console.error('[RC] presentPaywall error:', e?.message ?? e);
     return false;
   }
 }
