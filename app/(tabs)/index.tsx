@@ -38,7 +38,6 @@ import {
   getStreak,
   updateStreak,
   FREE_TIER_LIMIT,
-  PRO_TIER_LIMIT,
   type Favorite,
   type ResponseStyle,
   type UserProfile,
@@ -199,7 +198,7 @@ export default function ChatScreen() {
     setIsPro(pro);
     setProfile(prof);
     setStreak(streakCount);
-    if (!byok) setRemaining(await getRemainingQuestions(pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT));
+    if (!byok && !pro) setRemaining(await getRemainingQuestions(FREE_TIER_LIMIT));
   }, []);
 
   const { prompt, t, continueId, newChat, chatTitle } = useLocalSearchParams<{ prompt?: string; t?: string; continueId?: string; newChat?: string; chatTitle?: string }>();
@@ -285,14 +284,12 @@ export default function ChatScreen() {
       return;
     }
 
-    // Non-BYOK: enforce daily limit and paywall
+    // Non-BYOK: enforce daily limit for free users; Pro is unlimited
     if (!byokKey) {
-      let pro = isProRef.current;
-      let limit = pro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
-      let allowed = await checkAndIncrementDailyCount(limit);
-
-      if (!allowed) {
-        if (!pro) {
+      const pro = isProRef.current;
+      if (!pro) {
+        const allowed = await checkAndIncrementDailyCount(FREE_TIER_LIMIT);
+        if (!allowed) {
           let upgraded = false;
           try {
             upgraded = await presentProPaywall();
@@ -305,25 +302,11 @@ export default function ChatScreen() {
             loadingRef.current = false;
             return;
           }
-          // Upgrade succeeded — retry with Pro limit and continue sending
           setIsPro(true);
           isProRef.current = true;
-          pro = true;
-          limit = PRO_TIER_LIMIT;
-          allowed = await checkAndIncrementDailyCount(limit);
-          if (!allowed) {
-            loadingRef.current = false;
-            setError(`You've reached your ${PRO_TIER_LIMIT} question limit for today. Come back tomorrow!`);
-            return;
-          }
-          setRemaining(await getRemainingQuestions(PRO_TIER_LIMIT));
         } else {
-          loadingRef.current = false;
-          setError(`You've reached your ${PRO_TIER_LIMIT} question limit for today. Come back tomorrow!`);
-          return;
+          setRemaining(r => Math.max(0, r - 1));
         }
-      } else {
-        setRemaining(r => Math.max(0, r - 1));
       }
     }
 

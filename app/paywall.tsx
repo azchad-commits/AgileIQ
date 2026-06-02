@@ -13,6 +13,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
+import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../constants/urls';
 import { purchasePro, restorePurchases } from '../services/revenueCat';
 import { completePaywall } from '../services/paywallBridge';
 import Purchases from 'react-native-purchases';
@@ -22,7 +23,7 @@ const FEATURES = [
   { icon: 'school-outline', text: 'Expert Agile, Scrum & SAFe guidance' },
   { icon: 'scan-outline', text: 'Board & roadmap analysis with vision AI' },
   { icon: 'grid-outline', text: 'All topics, frameworks & ceremonies' },
-  { icon: 'flash-outline', text: 'Faster, priority responses' },
+  { icon: 'heart-outline', text: 'Support independent development' },
 ];
 
 export default function PaywallScreen() {
@@ -108,7 +109,7 @@ export default function PaywallScreen() {
 
         <View style={styles.priceCard}>
           <Text style={styles.price}>{priceString}</Text>
-          <Text style={styles.priceNote}>Cancel anytime. Billed monthly.</Text>
+          <Text style={styles.priceNote}>1-month auto-renewing subscription. Cancel anytime.</Text>
         </View>
 
         <TouchableOpacity
@@ -143,11 +144,11 @@ export default function PaywallScreen() {
             App Store Settings
           </Text>
           .{' '}
-          <Text style={styles.legalLink} onPress={() => Linking.openURL('https://www.agilecoachiq.com/privacy')}>
+          <Text style={styles.legalLink} onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}>
             Privacy Policy
           </Text>
           {' · '}
-          <Text style={styles.legalLink} onPress={() => Linking.openURL('https://www.agilecoachiq.com/terms')}>
+          <Text style={styles.legalLink} onPress={() => Linking.openURL(TERMS_OF_USE_URL)}>
             Terms of Use
           </Text>
         </Text>

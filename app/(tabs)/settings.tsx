@@ -17,14 +17,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import Constants from 'expo-constants';
 import { Colors } from '../../constants/colors';
+import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../../constants/urls';
 import { getApiKey, setApiKey, deleteApiKey } from '../../services/secureStorage';
-import { getUserContext, setUserContext as saveUserContext, getIsPro, FREE_TIER_LIMIT, PRO_TIER_LIMIT, getUserProfile, setUserProfile, getResponseStyle, setResponseStyle, getNotificationsEnabled, setNotificationsEnabled, type UserProfile, type ResponseStyle } from '../../services/storage';
+import { getUserContext, setUserContext as saveUserContext, getIsPro, FREE_TIER_LIMIT, getUserProfile, setUserProfile, getResponseStyle, setResponseStyle, getNotificationsEnabled, setNotificationsEnabled, type UserProfile, type ResponseStyle } from '../../services/storage';
 import { requestNotificationPermissions, scheduleDailyTip, cancelDailyTip } from '../../services/notifications';
 import { syncProStatus, presentProPaywall, restorePurchases } from '../../services/revenueCat';
 import { OnboardingModal } from '../../components/OnboardingModal';
 
-const PRIVACY_POLICY_URL = 'https://azchad-commits.github.io/AgileIQ/privacy-policy.html';
-const TERMS_URL = 'https://azchad-commits.github.io/AgileIQ/terms-of-use.html';
 
 export default function SettingsScreen() {
   const [apiKey, setApiKeyState] = useState('');
@@ -64,7 +63,7 @@ export default function SettingsScreen() {
       const purchased = await presentProPaywall();
       if (purchased) setIsProState(true);
     } catch (e: any) {
-      Alert.alert('Paywall Error', `${e?.message ?? 'Unknown error'}\nCode: ${e?.code ?? 'none'}\nUnderlying: ${e?.userInfo?.readable_error_code ?? JSON.stringify(e?.userInfo ?? {})}`);
+      Alert.alert('Purchase Error', e?.message ?? 'Unable to complete purchase. Please try again.');
     } finally {
       setUpgrading(false);
     }
@@ -194,9 +193,13 @@ export default function SettingsScreen() {
                 <View style={styles.planRow}>
                   <View>
                     <Text style={styles.planTitle}>AgileCoachIQ Pro ✦</Text>
-                    <Text style={styles.planSub}>{PRO_TIER_LIMIT} questions/day · 1-month subscription · $9.99/month</Text>
+                    <Text style={styles.planSub}>Unlimited questions · auto-renews $9.99/month</Text>
                   </View>
                 </View>
+                <View style={styles.divider} />
+                <TouchableOpacity style={styles.planAction} onPress={() => Linking.openURL('itms-apps://apps.apple.com/account/subscriptions')} activeOpacity={0.7}>
+                  <Text style={styles.planActionText}>Manage Subscription</Text>
+                </TouchableOpacity>
                 <View style={styles.divider} />
                 <TouchableOpacity style={styles.planAction} onPress={handleRestore} disabled={restoring} activeOpacity={0.7}>
                   {restoring
@@ -205,7 +208,7 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
                 <View style={styles.divider} />
                 <View style={styles.legalRow}>
-                  <TouchableOpacity onPress={() => Linking.openURL(TERMS_URL)} activeOpacity={0.7} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                  <TouchableOpacity onPress={() => Linking.openURL(TERMS_OF_USE_URL)} activeOpacity={0.7} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                     <Text style={styles.legalLink}>Terms of Use</Text>
                   </TouchableOpacity>
                   <Text style={styles.legalSep}>·</Text>
@@ -239,7 +242,7 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
                 <View style={styles.divider} />
                 <View style={styles.legalRow}>
-                  <TouchableOpacity onPress={() => Linking.openURL(TERMS_URL)} activeOpacity={0.7} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                  <TouchableOpacity onPress={() => Linking.openURL(TERMS_OF_USE_URL)} activeOpacity={0.7} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                     <Text style={styles.legalLink}>Terms of Use</Text>
                   </TouchableOpacity>
                   <Text style={styles.legalSep}>·</Text>
@@ -476,7 +479,7 @@ export default function SettingsScreen() {
               <Text style={styles.infoChevron}>›</Text>
             </TouchableOpacity>
             <View style={styles.divider} />
-            <TouchableOpacity style={styles.infoRow} onPress={() => Linking.openURL(TERMS_URL)} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.infoRow} onPress={() => Linking.openURL(TERMS_OF_USE_URL)} activeOpacity={0.7}>
               <Text style={styles.infoLabel}>Terms of Use</Text>
               <Text style={styles.infoChevron}>›</Text>
             </TouchableOpacity>
