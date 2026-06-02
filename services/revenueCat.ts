@@ -18,7 +18,7 @@ function isConfigured(): boolean {
 
 export function initializePurchases(): void {
   if (!isConfigured()) return;
-  Purchases.setLogLevel(LOG_LEVEL.WARN);
+  Purchases.setLogLevel(LOG_LEVEL.DEBUG);
   Purchases.configure({ apiKey: getApiKey() });
 }
 
@@ -54,7 +54,10 @@ export async function presentProPaywall(): Promise<boolean> {
   if (!isConfigured()) return false;
   const offerings = await Purchases.getOfferings();
   const offering = offerings.current ?? Object.values(offerings.all)[0] ?? undefined;
-  const result = await RevenueCatUI.presentPaywall({ offering });
+  const result = await RevenueCatUI.presentPaywallIfNeeded({
+    requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
+    offering,
+  });
   const purchased = result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
   if (purchased) await setIsPro(true);
   return purchased;
