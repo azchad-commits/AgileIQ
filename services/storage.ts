@@ -5,7 +5,6 @@ const CONVERSATIONS_KEY = 'conversations';
 const MAX_CONVERSATIONS = 50;
 
 export const FREE_TIER_LIMIT = 5;
-export const PRO_TIER_LIMIT = 30;
 
 interface DailyCount {
   date: string;

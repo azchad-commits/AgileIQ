@@ -41,6 +41,11 @@ export default function PaywallScreen() {
       .catch(() => {});
   }, []);
 
+  // Resolve the bridge promise if the paywall is dismissed via swipe gesture
+  useEffect(() => {
+    return () => { completePaywall(false); };
+  }, []);
+
   const handleClose = () => {
     completePaywall(false);
     router.back();
