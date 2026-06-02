@@ -20,7 +20,7 @@ function isConfigured(): boolean {
 
 export function initializePurchases(): void {
   if (!isConfigured()) return;
-  Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+  Purchases.setLogLevel(LOG_LEVEL.WARN);
   Purchases.configure({ apiKey: getApiKey() });
 }
 
