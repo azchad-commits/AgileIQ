@@ -1,7 +1,9 @@
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
+import { router } from 'expo-router';
 import { Platform } from 'react-native';
 import { setIsPro } from './storage';
+import { createPaywallPromise } from './paywallBridge';
 
 // Add your keys from app.revenuecat.com → Project Settings → API Keys
 const RC_IOS_KEY = 'appl_ZokAwbqPypPkTKAdDgXFsOYhabo';
@@ -52,15 +54,22 @@ export async function purchasePro(): Promise<{ success: boolean; cancelled: bool
 
 export async function presentProPaywall(): Promise<boolean> {
   if (!isConfigured()) return false;
-  const offerings = await Purchases.getOfferings();
-  const offering = offerings.current ?? Object.values(offerings.all)[0] ?? undefined;
-  const result = await RevenueCatUI.presentPaywallIfNeeded({
-    requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
-    offering,
-  });
-  const purchased = result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
-  if (purchased) await setIsPro(true);
-  return purchased;
+  try {
+    const offerings = await Purchases.getOfferings();
+    const offering = offerings.current ?? Object.values(offerings.all)[0] ?? undefined;
+    const result = await RevenueCatUI.presentPaywallIfNeeded({
+      requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
+      offering,
+    });
+    const purchased = result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
+    if (purchased) await setIsPro(true);
+    return purchased;
+  } catch {
+    // RevenueCatUI failed (e.g. no paywall template wired up) — use custom paywall screen
+    const promise = createPaywallPromise();
+    router.push('/paywall');
+    return promise;
+  }
 }
 
 export async function restorePurchases(): Promise<boolean> {
