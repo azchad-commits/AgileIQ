@@ -293,7 +293,14 @@ export default function ChatScreen() {
 
       if (!allowed) {
         if (!pro) {
-          const upgraded = await presentProPaywall();
+          let upgraded = false;
+          try {
+            upgraded = await presentProPaywall();
+          } catch (e: any) {
+            loadingRef.current = false;
+            Alert.alert('Upgrade Error', e?.message ?? 'Unable to complete purchase.');
+            return;
+          }
           if (!upgraded) {
             loadingRef.current = false;
             return;

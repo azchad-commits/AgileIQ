@@ -133,7 +133,13 @@ export default function AnalyzeScreen() {
     if (!byokKey) {
       const pro = await getIsPro();
       if (!pro) {
-        const upgraded = await presentProPaywall();
+        let upgraded = false;
+        try {
+          upgraded = await presentProPaywall();
+        } catch (e: any) {
+          Alert.alert('Upgrade Error', e?.message ?? 'Unable to complete purchase.');
+          return;
+        }
         if (!upgraded) return;
       }
     }
