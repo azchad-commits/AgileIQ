@@ -52,7 +52,9 @@ export async function purchasePro(): Promise<{ success: boolean; cancelled: bool
 
 export async function presentProPaywall(): Promise<boolean> {
   if (!isConfigured()) return false;
-  const result = await RevenueCatUI.presentPaywall();
+  const offerings = await Purchases.getOfferings();
+  const offering = offerings.current ?? Object.values(offerings.all)[0] ?? undefined;
+  const result = await RevenueCatUI.presentPaywall({ offering });
   const purchased = result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
   if (purchased) await setIsPro(true);
   return purchased;
