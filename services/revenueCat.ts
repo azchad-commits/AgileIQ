@@ -52,17 +52,10 @@ export async function purchasePro(): Promise<{ success: boolean; cancelled: bool
 
 export async function presentProPaywall(): Promise<boolean> {
   if (!isConfigured()) return false;
-  try {
-    const result = await RevenueCatUI.presentPaywallIfNeeded({
-      requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
-    });
-    const purchased = result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
-    if (purchased) await setIsPro(true);
-    return purchased;
-  } catch (e: any) {
-    console.error('[RC] presentPaywall error:', e?.message ?? e);
-    return false;
-  }
+  const result = await RevenueCatUI.presentPaywall();
+  const purchased = result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
+  if (purchased) await setIsPro(true);
+  return purchased;
 }
 
 export async function restorePurchases(): Promise<boolean> {

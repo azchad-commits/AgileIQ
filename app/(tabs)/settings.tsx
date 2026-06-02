@@ -64,7 +64,7 @@ export default function SettingsScreen() {
       const purchased = await presentProPaywall();
       if (purchased) setIsProState(true);
     } catch (e: any) {
-      Alert.alert('Purchase failed', e.message ?? 'Something went wrong.');
+      Alert.alert('Paywall Error', `${e?.message ?? 'Unknown error'}\nCode: ${e?.code ?? 'none'}\nUnderlying: ${e?.userInfo?.readable_error_code ?? JSON.stringify(e?.userInfo ?? {})}`);
     } finally {
       setUpgrading(false);
     }
